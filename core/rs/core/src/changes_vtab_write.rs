@@ -261,17 +261,41 @@ fn set_winner_clock(
         return Err(rc);
     }
 
-    match set_stmt.step() {
+    let rowid = match set_stmt.step() {
         Ok(ResultCode::ROW) => {
             let rowid = set_stmt.column_int64(0);
             reset_cached_stmt(set_stmt.stmt)?;
-            Ok(rowid)
+            rowid
         }
         _ => {
             reset_cached_stmt(set_stmt.stmt)?;
-            Err(ResultCode::ERROR)
+            return Err(ResultCode::ERROR);
+        }
+    };
+
+    if !insert_site_id.is_empty() {
+        unsafe {
+            let bind_result = (*ext_data)
+                .pSetSiteVersionStmt
+                .bind_blob(1, insert_site_id, sqlite::Destructor::STATIC)
+                .and_then(|_| {
+                    (*ext_data)
+                        .pSetSiteVersionStmt
+                        .bind_int64(2, insert_site_vrsn)
+                });
+
+            if let Err(rc) = bind_result {
+                reset_cached_stmt((*ext_data).pSetSiteVersionStmt)?;
+                return Err(rc);
+            }
+            if let Err(rc) = (*ext_data).pSetSiteVersionStmt.step() {
+                reset_cached_stmt((*ext_data).pSetSiteVersionStmt)?;
+                return Err(rc);
+            }
+            reset_cached_stmt((*ext_data).pSetSiteVersionStmt)?;
         }
     }
+    Ok(rowid)
 }
 
 fn merge_sentinel_only_insert(
@@ -508,8 +532,6 @@ unsafe fn merge_insert(
     let insert_seq = args[2 + CrsqlChangesColumn::Seq as usize].int64();
     let insert_site_vrsn = args[2 + CrsqlChangesColumn::SiteVrsn as usize].int64();
 
-    // libc_print::libc_println!("insert site version = {}", insert_site_vrsn);
-
     if insert_site_id.bytes() > crate::consts::SITE_ID_LEN {
         let err = CString::new("crsql - site id exceeded max length")?;
         *errmsg = err.into_raw();
@@ -517,6 +539,13 @@ unsafe fn merge_insert(
     }
 
     let insert_site_id = insert_site_id.blob();
+
+    // libc_print::libc_println!(
+    //     "insert site id = {:?}, site version = {}",
+    //     insert_site_id,
+    //     insert_site_vrsn
+    // );
+
     let tbl_infos = mem::ManuallyDrop::new(Box::from_raw(
         (*(*tab).pExtData).tableInfos as *mut Vec<TableInfo>,
     ));
@@ -724,6 +753,7 @@ unsafe fn merge_insert(
     );
     match merge_result {
         Err(rc) => {
+            libc_print::libc_eprint!("error set_winner_clock: {}", rc);
             return Err(rc);
         }
         Ok(inner_rowid) => {

@@ -1,3 +1,4 @@
+use alloc::string::ToString;
 use core::ffi::{c_char, c_int};
 
 use crate::{consts, tableinfo::TableInfo};
@@ -174,9 +175,9 @@ fn maybe_update_db_inner(
     // }
 
     if recorded_version < consts::CRSQLITE_VERSION_0_17_0 && !is_blank_slate {
-        db.exec_safe("BEGIN")?;
+        db.exec_safe("SAVEPOINT crsql_0_17_0")?;
         if let Err(e) = update_to_0_17_0(db) {
-            _ = db.exec_safe("ROLLBACK");
+            _ = db.exec_safe("RELEASE crsql_0_17_0");
             return Err(e);
         }
     }
@@ -231,23 +232,28 @@ pub fn create_clock_table(
     ))?;
 
     db.exec_safe(
-      &format!(
+        &format!(
         "CREATE INDEX IF NOT EXISTS \"{table_name}__crsql_clock_dbv_idx\" ON \"{table_name}__crsql_clock\" (\"db_version\")",
         table_name = crate::util::escape_ident(table_name),
-      ))?;
+        ))?;
     db.exec_safe(
-      &format!(
+        &format!(
+            "CREATE INDEX IF NOT EXISTS \"{table_name}__crsql_clock_sitev_idx\" ON \"{table_name}__crsql_clock\" (\"site_version\")",
+            table_name = crate::util::escape_ident(table_name),
+        ))?;
+    db.exec_safe(
+        &format!(
         "CREATE TABLE IF NOT EXISTS \"{table_name}__crsql_pks\" (__crsql_key INTEGER PRIMARY KEY, {pk_list})",
         table_name = table_name,
         pk_list = pk_list,
-      )
+        )
     )?;
     db.exec_safe(
-      &format!(
+        &format!(
         "CREATE UNIQUE INDEX IF NOT EXISTS \"{table_name}__crsql_pks_pks\" ON \"{table_name}__crsql_pks\" ({pk_list})",
         table_name = table_name,
         pk_list = pk_list
-      )
+        )
     )
 }
 
@@ -259,12 +265,16 @@ fn update_to_0_17_0(db: *mut sqlite3) -> Result<(), ResultCode> {
     let mut names = alloc::vec::Vec::new();
 
     while stmt.step()? == ResultCode::ROW {
-        names.push(stmt.column_text(0)?);
+        names.push(stmt.column_text(0)?.to_string());
     }
 
     for name in names {
         db.exec_safe(&format!(
             "ALTER TABLE {name} ADD COLUMN site_version INTEGER NOT NULL DEFAULT 0"
+        ))?;
+        db.exec_safe(&format!(
+            "CREATE INDEX IF NOT EXISTS \"{table_name}_sitev_idx\" ON \"{table_name}\" (\"site_version\")",
+            table_name = crate::util::escape_ident(&name),
         ))?;
     }
 
