@@ -298,12 +298,11 @@ impl TableInfo {
         if self.set_winner_clock_stmt.try_borrow()?.is_none() {
             let sql = format!(
                 "INSERT OR REPLACE INTO \"{table_name}__crsql_clock\"
-              (key, col_name, col_version, db_version, seq, site_id, site_version)
+              (key, col_name, col_version, db_version, seq, site_id)
               VALUES (
                 ?,
                 ?,
                 ?,
-                crsql_next_db_version(?),
                 ?,
                 ?,
                 ?
@@ -444,22 +443,19 @@ impl TableInfo {
             col_version,
             db_version,
             seq,
-            site_id,
-            site_version
+            site_id
           ) SELECT
             ?,
             '{sentinel}',
             2,
             ?,
             ?,
-            0,
-            ? WHERE true
+            0 WHERE true
           ON CONFLICT DO UPDATE SET
             col_version = 1 + col_version,
             db_version = excluded.db_version,
             seq = excluded.seq,
-            site_id = 0,
-            site_version = excluded.site_version",
+            site_id = 0",
                 table_name = crate::util::escape_ident(&self.tbl_name),
                 sentinel = crate::c::DELETE_SENTINEL,
             );
@@ -523,22 +519,19 @@ impl TableInfo {
                 col_version,
                 db_version,
                 seq,
-                site_id,
-                site_version
+                site_id
               ) SELECT
                 ?,
                 '{sentinel}',
                 1,
                 ?,
                 ?,
-                0,
-                ? WHERE true
+                0 WHERE true
                 ON CONFLICT DO UPDATE SET
                   col_version = CASE col_version % 2 WHEN 0 THEN col_version + 1 ELSE col_version + 2 END,
                   db_version = excluded.db_version,
                   seq = excluded.seq,
-                  site_id = 0,
-                  site_version = excluded.site_version",
+                  site_id = 0",
               table_name = crate::util::escape_ident(&self.tbl_name),
               sentinel = crate::c::INSERT_SENTINEL,
             );
@@ -555,12 +548,12 @@ impl TableInfo {
         if self.combo_insert_clock_stmt.try_borrow()?.is_none() {
             let sql = format!(
                 "INSERT OR IGNORE INTO \"{table_name}__crsql_clock\" (
-                    key, col_name, col_version, db_version, seq, site_id, site_version
+                    key, col_name, col_version, db_version, seq, site_id
                 ) VALUES {values};",
                 values = self
                     .non_pks
                     .iter()
-                    .map(|_col| "(?, ?, 1, ?, ?, 0, ?)")
+                    .map(|_col| "(?, ?, 1, ?, ?, 0)")
                     .collect::<Vec<_>>()
                     .join(", "),
                 table_name = crate::util::escape_ident(&self.tbl_name)
@@ -594,8 +587,8 @@ impl TableInfo {
         if self.insert_clock_stmt.try_borrow()?.is_none() {
             let sql = format!(
                 "INSERT INTO \"{table_name}__crsql_clock\" (
-                    key, col_name, col_version, db_version, seq, site_id, site_version
-                ) VALUES (?, ?, 1, ?, ?, 0, ?);",
+                    key, col_name, col_version, db_version, seq, site_id
+                ) VALUES (?, ?, 1, ?, ?, 0);",
                 table_name = crate::util::escape_ident(&self.tbl_name),
             );
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
@@ -615,8 +608,7 @@ impl TableInfo {
                     col_version = col_version + 1,
                     db_version = ?,
                     seq = ?,
-                    site_id = 0,
-                    site_version = ?
+                    site_id = 0
                 WHERE key = ? AND col_name = ?;",
                 table_name = crate::util::escape_ident(&self.tbl_name),
             );
@@ -640,8 +632,7 @@ impl TableInfo {
                 col_version = CASE col_version % 2 WHEN 0 THEN col_version + 1 ELSE col_version + 2 END,
                 db_version = ?,
                 seq = ?,
-                site_id = 0,
-                site_version = ?
+                site_id = 0
               WHERE key = ? AND col_name = ?",
               table_name = crate::util::escape_ident(&self.tbl_name),
             );
