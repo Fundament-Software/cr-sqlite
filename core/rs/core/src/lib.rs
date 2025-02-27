@@ -53,9 +53,8 @@ use alloc::format;
 use core::ffi::c_char;
 use core::mem;
 use core::ptr::null_mut;
+use alloc::borrow::Cow;
 extern crate alloc;
-use alloc::string::String;
-use alloc::string::ToString;
 use alter::crsql_compact_post_alter;
 use automigrate::*;
 use backfill::*;
@@ -750,12 +749,12 @@ unsafe extern "C" fn x_crsql_commit_alter(
     };
     if rc != ResultCode::OK as c_int {
         // TODO: use err_msg
-        // let error_str = if !err_msg.is_null() {
-        //     unsafe { CStr::from_ptr(err_msg).to_string_lossy().to_string() }
-        // } else {
-        //     "Unknown error".to_string()
-        // };
-        ctx.result_error(&format!("failed compacting tables post alteration: {}", non_destructive));
+        let error_str = if !err_msg.is_null() {
+            unsafe { CStr::from_ptr(err_msg).to_string_lossy() }
+        } else {
+            Cow::Borrowed("Hello World")
+        };
+        ctx.result_error(&format!("failed compacting tables post alteration: {}", error_str));
         let _ = db.exec_safe("ROLLBACK");
         return;
     }
