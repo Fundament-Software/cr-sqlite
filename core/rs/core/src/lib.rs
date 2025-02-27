@@ -49,10 +49,13 @@ mod triggers;
 mod unpack_columns_vtab;
 mod util;
 
+use alloc::format;
 use core::ffi::c_char;
 use core::mem;
 use core::ptr::null_mut;
 extern crate alloc;
+use alloc::string::String;
+use alloc::string::ToString;
 use alter::crsql_compact_post_alter;
 use automigrate::*;
 use backfill::*;
@@ -692,6 +695,8 @@ unsafe extern "C" fn x_crsql_commit_alter(
         ("main\0", args[0].text())
     };
 
+    //libc_print::libc_println!("x_crsql_commit_alter");
+
     let non_destructive = if argc >= 3 { args[2].int() == 1 } else { false };
 
     let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
@@ -745,7 +750,12 @@ unsafe extern "C" fn x_crsql_commit_alter(
     };
     if rc != ResultCode::OK as c_int {
         // TODO: use err_msg
-        ctx.result_error("failed compacting tables post alteration");
+        // let error_str = if !err_msg.is_null() {
+        //     unsafe { CStr::from_ptr(err_msg).to_string_lossy().to_string() }
+        // } else {
+        //     "Unknown error".to_string()
+        // };
+        ctx.result_error(&format!("failed compacting tables post alteration: {}", non_destructive));
         let _ = db.exec_safe("ROLLBACK");
         return;
     }
