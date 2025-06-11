@@ -68,7 +68,6 @@ use is_crr::*;
 use local_writes::after_delete::x_crsql_after_delete;
 use local_writes::after_insert::x_crsql_after_insert;
 use local_writes::after_update::x_crsql_after_update;
-// use site_version::crsql_fill_site_version_if_needed;
 use sqlite::{Destructor, ResultCode};
 use sqlite_nostd as sqlite;
 use sqlite_nostd::{Connection, Context, Value};
@@ -318,23 +317,6 @@ pub extern "C" fn sqlite3_crsqlcore_init(
         unsafe { crsql_freeExtData(ext_data) };
         return null_mut();
     }
-
-    // let rc = db
-    //     .create_function_v2(
-    //         "crsql_site_version",
-    //         0,
-    //         sqlite::INNOCUOUS | sqlite::UTF8,
-    //         Some(ext_data as *mut c_void),
-    //         Some(x_crsql_site_version),
-    //         None,
-    //         None,
-    //         None,
-    //     )
-    //     .unwrap_or(ResultCode::ERROR);
-    // if rc != ResultCode::OK {
-    //     unsafe { crsql_freeExtData(ext_data) };
-    //     return null_mut();
-    // }
 
     let rc = db
         .create_function_v2(
@@ -610,11 +592,6 @@ unsafe extern "C" fn x_crsql_as_crr(
         ("main\0", args[0].text())
     };
 
-    // libc_print::libc_println!(
-    //     "crsql_as_crr, schema_name = {}, table_name = {}",
-    //     schema_name,
-    //     table_name
-    // );
     let db = ctx.db_handle();
     let mut err_msg = null_mut();
     let rc = db.exec_safe("SAVEPOINT as_crr");
@@ -711,8 +688,6 @@ unsafe extern "C" fn x_crsql_commit_alter(
     } else {
         ("main\0", args[0].text())
     };
-
-    //libc_print::libc_println!("x_crsql_commit_alter");
 
     let non_destructive = if argc >= 3 { args[2].int() == 1 } else { false };
 
@@ -841,12 +816,6 @@ unsafe extern "C" fn x_crsql_next_db_version(
     let db = ctx.db_handle();
     let mut err_msg = null_mut();
 
-    let provided_version = if argc == 1 {
-        sqlite::args!(argc, argv)[0].int64()
-    } else {
-        0
-    };
-
     let ret = crsql_next_db_version(db, ext_data, &mut err_msg as *mut _);
     if ret < 0 {
         // TODO: use err_msg!
@@ -872,11 +841,6 @@ unsafe extern "C" fn x_crsql_peek_next_db_version(
     let db = ctx.db_handle();
     let mut err_msg = null_mut();
 
-    let provided_version = if argc == 1 {
-        sqlite::args!(argc, argv)[0].int64()
-    } else {
-        0
-    };
 
     let ret = crsql_peek_next_db_version(db, ext_data, &mut err_msg as *mut _);
     if ret < 0 {
@@ -887,28 +851,6 @@ unsafe extern "C" fn x_crsql_peek_next_db_version(
 
     ctx.result_int64(ret);
 }
-
-/**
- * Return the current version of the site.
- *
- * `select crsql_site_version()`
- */
-// unsafe extern "C" fn x_crsql_site_version(
-//     ctx: *mut sqlite::context,
-//     _argc: i32,
-//     _argv: *mut *mut sqlite::value,
-// ) {
-//     let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
-//     let db = ctx.db_handle();
-//     let mut err_msg = null_mut();
-//     let rc = crsql_fill_site_version_if_needed(db, ext_data, &mut err_msg as *mut _);
-//     if rc != ResultCode::OK as c_int {
-//         // TODO: pass err_msg!
-//         ctx.result_error("failed to fill db version");
-//         return;
-//     }
-//     sqlite::result_int64(ctx, (*ext_data).siteVersion);
-// }
 
 /**
  * The sha of the commit that this version of crsqlite was built from.

@@ -376,7 +376,6 @@ impl TableInfo {
                 pk_idents = crate::util::as_identifier_list(&self.pks, None)?,
                 pk_bindings = crate::util::binding_list(self.pks.len()),
             );
-            // libc_print::libc_println!("pk-only-insert, sql = {}", sql);
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
             *self.merge_pk_only_insert_stmt.try_borrow_mut()? = Some(ret);
         }
@@ -492,13 +491,13 @@ impl TableInfo {
             // following our changes.
             let sql = format!(
                 "UPDATE OR REPLACE \"{table_name}__crsql_clock\" SET
-                    key = ?,
-                    db_version = ?,
-                    seq = ?,
-                    col_version = col_version + 1,
-                    site_id = 0
-                WHERE
-                    key = ? AND col_name = ?",
+                key = ?,
+                db_version = ?,
+                seq = ?,
+                col_version = col_version + 1,
+                site_id = 0
+            WHERE
+                key = ? AND col_name = ?",
                 table_name = crate::util::escape_ident(&self.tbl_name),
             );
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;

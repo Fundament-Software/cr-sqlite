@@ -62,13 +62,11 @@ where
 fn step_trigger_stmt(stmt: &ManagedStmt) -> Result<ResultCode, String> {
     match stmt.step() {
         Ok(ResultCode::DONE) => {
-            // libc_print::libc_eprintln!("stepped code: DONE");
             reset_cached_stmt(stmt.stmt)
                 .map_err(|_e| "done -- unable to reset cached trigger stmt")?;
             Ok(ResultCode::OK)
         }
         Ok(code) | Err(code) => {
-            // libc_print::libc_eprintln!("stepped code: {code}");
             reset_cached_stmt(stmt.stmt).map_err(|_e| {
                 format!("error -- unable to reset cached trigger stmt, code {code}")
             })?;
@@ -217,8 +215,6 @@ fn mark_locally_updated(
     db_version: sqlite::int64,
     seq: i32,
 ) -> Result<ResultCode, String> {
-    // libc_print::libc_println!("mark_locally_updated, site_version = {}", site_version);
-
     let update_clock_stmt_ref = tbl_info
         .get_update_clock_stmt(db)
         .map_err(|_e| "failed to get update_clock_stmt")?;
