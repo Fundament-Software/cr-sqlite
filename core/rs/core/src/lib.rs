@@ -26,6 +26,7 @@ mod create_crr;
 pub mod db_version;
 #[cfg(not(feature = "test"))]
 mod db_version;
+mod debug;
 mod ext_data;
 mod is_crr;
 mod local_writes;
@@ -69,6 +70,8 @@ use tableinfo::{crsql_ensure_table_infos_are_up_to_date, is_table_compatible, pu
 use teardown::*;
 use triggers::create_triggers;
 
+pub use debug::debug_log;
+
 pub extern "C" fn crsql_as_table(
     ctx: *mut sqlite::context,
     argc: i32,
@@ -108,6 +111,22 @@ pub extern "C" fn sqlite3_crsqlcore_init(
     api: *mut sqlite::api_routines,
 ) -> *mut c_void {
     sqlite::EXTENSION_INIT2(api);
+
+    let rc = db
+        .create_function_v2(
+            "crsql_set_debug",
+            1,
+            sqlite::UTF8 | sqlite::DIRECTONLY,
+            None,
+            Some(debug::x_crsql_set_debug),
+            None,
+            None,
+            None,
+        )
+        .unwrap_or(sqlite::ResultCode::ERROR);
+    if rc != ResultCode::OK {
+        return null_mut();
+    }
 
     let rc = db
         .create_function_v2(
