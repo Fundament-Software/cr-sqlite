@@ -503,7 +503,6 @@ static void noopsDoNotMoveClocks() {
   printf("NoopsDoNotMoveClocks\n");
   // syncing from A -> B, while no changes happen on B, moves up
   // B's clock still.
-
   sqlite3 *db1;
   sqlite3 *db2;
   int rc = SQLITE_OK;
