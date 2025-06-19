@@ -74,7 +74,7 @@ fn after_update(
     let next_db_version = crate::db_version::next_db_version(db, ext_data, None)?;
     let new_key = tbl_info
         .get_or_create_key_via_raw_values(db, pks_new)
-        .or_else(|_| Err("failed geteting or creating lookaside key"))?;
+        .or_else(|_| Err("failed getting or creating lookaside key"))?;
 
     // Changing a primary key column to a new value is the same thing as deleting the row
     // previously identified by the primary key.
@@ -85,8 +85,8 @@ fn after_update(
         let next_seq = super::bump_seq(ext_data);
         // Record the delete of the row identified by the old primary keys
         after_update__mark_old_pk_row_deleted(db, tbl_info, old_key, next_db_version, next_seq)?;
-        // TODO: each non sentinel needs a unique seq on the move?
         let next_seq = super::bump_seq(ext_data);
+        // todo: we don't need to this, if there's no existing row (cl is assumed to be 1).
         super::mark_new_pk_row_created(db, tbl_info, new_key, next_db_version, next_seq)?;
         for col in tbl_info.non_pks.iter() {
             let next_seq = super::bump_seq(ext_data);
