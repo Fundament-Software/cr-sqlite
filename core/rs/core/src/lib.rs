@@ -548,7 +548,7 @@ unsafe extern "C" fn x_crsql_as_crr(
 ) {
     if argc == 0 {
         ctx.result_error(
-            "Wrong number of args provided to crsql_as_crr. Provide the schema 
+            "Wrong number of args provided to crsql_as_crr. Provide the schema
           name and table name or just the table name.",
         );
         return;
@@ -609,7 +609,7 @@ unsafe extern "C" fn x_crsql_begin_alter(
 ) {
     if argc == 0 {
         ctx.result_error(
-            "Wrong number of args provided to crsql_begin_alter. Provide the 
+            "Wrong number of args provided to crsql_begin_alter. Provide the
           schema name and table name or just the table name.",
         );
         return;
@@ -620,7 +620,7 @@ unsafe extern "C" fn x_crsql_begin_alter(
     let (_schema_name, table_name) = if argc == 2 {
         (args[0].text(), args[1].text())
     } else {
-        ("main", args[0].text())
+        ("main\0", args[0].text())
     };
 
     let db = ctx.db_handle();
@@ -645,7 +645,7 @@ unsafe extern "C" fn x_crsql_commit_alter(
 ) {
     if argc == 0 {
         ctx.result_error(
-            "Wrong number of args provided to crsql_commit_alter. Provide the 
+            "Wrong number of args provided to crsql_commit_alter. Provide the
           schema name and table name or just the table name.",
         );
         return;
@@ -655,7 +655,7 @@ unsafe extern "C" fn x_crsql_commit_alter(
     let (schema_name, table_name) = if argc >= 2 {
         (args[0].text(), args[1].text())
     } else {
-        ("main", args[0].text())
+        ("main\0", args[0].text())
     };
 
     let non_destructive = if argc >= 3 { args[2].int() == 1 } else { false };
