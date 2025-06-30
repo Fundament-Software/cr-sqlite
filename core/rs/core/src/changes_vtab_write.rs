@@ -41,12 +41,10 @@ fn did_cid_win(
     let col_vrsn_stmt_ref = tbl_info.get_col_version_stmt(db)?;
     let col_vrsn_stmt = col_vrsn_stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
 
-    let bind_result = col_vrsn_stmt.bind_int64(1, key);
+    let bind_result = col_vrsn_stmt
+        .bind_int64(1, key)
+        .and_then(|_| col_vrsn_stmt.bind_text(2, col_name, sqlite::Destructor::STATIC));
     if let Err(rc) = bind_result {
-        reset_cached_stmt(col_vrsn_stmt.stmt)?;
-        return Err(rc);
-    }
-    if let Err(rc) = col_vrsn_stmt.bind_text(2, col_name, sqlite::Destructor::STATIC) {
         reset_cached_stmt(col_vrsn_stmt.stmt)?;
         return Err(rc);
     }
@@ -98,13 +96,10 @@ fn did_cid_win(
                 let col_site_id_stmt_ref = tbl_info.get_col_site_id_stmt(db)?;
                 let col_site_id_stmt = col_site_id_stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
 
-                let bind_result = col_site_id_stmt.bind_int64(1, key);
+                let bind_result = col_site_id_stmt.bind_int64(1, key).and_then(|_| {
+                    col_site_id_stmt.bind_text(2, col_name, sqlite::Destructor::STATIC)
+                });
                 if let Err(rc) = bind_result {
-                    reset_cached_stmt(col_site_id_stmt.stmt)?;
-                    return Err(rc);
-                }
-                if let Err(rc) = col_site_id_stmt.bind_text(2, col_name, sqlite::Destructor::STATIC)
-                {
                     reset_cached_stmt(col_site_id_stmt.stmt)?;
                     return Err(rc);
                 }
@@ -182,9 +177,7 @@ fn set_winner_clock(
                 return Err(rc);
             }
 
-            let res = (*ext_data).pSelectSiteIdOrdinalStmt.step();
-
-            match res {
+            match (*ext_data).pSelectSiteIdOrdinalStmt.step() {
                 Ok(ResultCode::ROW) => {
                     let ordinal = (*ext_data).pSelectSiteIdOrdinalStmt.column_int64(0);
                     reset_cached_stmt((*ext_data).pSelectSiteIdOrdinalStmt)?;
@@ -205,8 +198,7 @@ fn set_winner_clock(
                         return Err(rc);
                     }
 
-                    let res = (*ext_data).pSetSiteIdOrdinalStmt.step();
-                    match res {
+                    match (*ext_data).pSetSiteIdOrdinalStmt.step() {
                         Ok(ResultCode::DONE) => {
                             reset_cached_stmt((*ext_data).pSetSiteIdOrdinalStmt)?;
                             return Err(ResultCode::ABORT);
@@ -233,13 +225,9 @@ fn set_winner_clock(
     let set_stmt_ref = tbl_info.get_set_winner_clock_stmt(db)?;
     let set_stmt = set_stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
 
-    let bind_result = set_stmt.bind_int64(1, key);
-    if let Err(rc) = bind_result {
-        reset_cached_stmt(set_stmt.stmt)?;
-        return Err(rc);
-    }
     let bind_result = set_stmt
-        .bind_text(2, insert_col_name, sqlite::Destructor::STATIC)
+        .bind_int64(1, key)
+        .and_then(|_| set_stmt.bind_text(2, insert_col_name, sqlite::Destructor::STATIC))
         .and_then(|_| set_stmt.bind_int64(3, insert_col_vrsn))
         .and_then(|_| set_stmt.bind_int64(4, insert_db_vrsn))
         .and_then(|_| set_stmt.bind_int64(5, insert_seq))
@@ -369,9 +357,7 @@ unsafe fn merge_delete(
     (*ext_data).pSetSyncBitStmt.reset()?;
     reset_cached_stmt(delete_stmt.stmt)?;
 
-    let sync_rc = (*ext_data)
-        .pClearSyncBitStmt
-        .step();
+    let sync_rc = (*ext_data).pClearSyncBitStmt.step();
 
     (*ext_data).pClearSyncBitStmt.reset()?;
     if let Err(sync_rc) = sync_rc {
@@ -428,12 +414,9 @@ fn get_local_cl(
     let local_cl_stmt_ref = tbl_info.get_local_cl_stmt(db)?;
     let local_cl_stmt = local_cl_stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
 
-    let rc = local_cl_stmt.bind_int64(1, key);
-    if let Err(rc) = rc {
-        reset_cached_stmt(local_cl_stmt.stmt)?;
-        return Err(rc);
-    }
-    let rc = local_cl_stmt.bind_int64(2, key);
+    let rc = local_cl_stmt
+        .bind_int64(1, key)
+        .and_then(|_| local_cl_stmt.bind_int64(2, key));
     if let Err(rc) = rc {
         reset_cached_stmt(local_cl_stmt.stmt)?;
         return Err(rc);
