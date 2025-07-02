@@ -397,17 +397,23 @@ def test_merge_same_w_tie_breaker():
     db3.execute("SELECT crsql_config_set('merge-equal-values', 1);")
     db3.commit()
 
+    # Sync changes so all nodes have seen changes from other nodes
     sync_left_to_right(db1, db2, 0)
-    changes2 = db2.execute("SELECT \"table\", pk, cid, val, col_version, site_id, db_version FROM crsql_changes").fetchall()
-    
     sync_left_to_right(db2, db1, 0)
-    changes1 = db1.execute("SELECT \"table\", pk, cid, val, col_version, site_id, db_version FROM crsql_changes").fetchall()
-
     sync_left_to_right(db2, db3, 0)
+    sync_left_to_right(db3, db2, 0)
+    sync_left_to_right(db3, db1, 0)
+
+    changes1 = db1.execute("SELECT \"table\", pk, cid, val, col_version, site_id, db_version FROM crsql_changes").fetchall()
+    changes2 = db2.execute("SELECT \"table\", pk, cid, val, col_version, site_id, db_version FROM crsql_changes").fetchall()
     changes3 = db3.execute("SELECT \"table\", pk, cid, val, col_version, site_id, db_version FROM crsql_changes").fetchall()
 
-    # check that everything by db_version is the same
-    assert (changes2[:-6] == changes1[:-6] == changes3[:-6])
+    # check that everything but db_version is the same
+    # print("changes2", changes2)
+    changes1_no_dbv = [x[:-1] for x in changes1]
+    changes2_no_dbv = [x[:-1] for x in changes2]
+    changes3_no_dbv = [x[:-1] for x in changes3]
+    assert (changes2_no_dbv == changes1_no_dbv == changes3_no_dbv)
 
     # Test that we're stable / do not loop when we tie break equal values
 

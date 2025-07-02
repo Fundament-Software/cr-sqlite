@@ -41,12 +41,10 @@ fn did_cid_win(
     let col_vrsn_stmt_ref = tbl_info.get_col_version_stmt(db)?;
     let col_vrsn_stmt = col_vrsn_stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
 
-    let bind_result = col_vrsn_stmt.bind_int64(1, key);
+    let bind_result = col_vrsn_stmt
+        .bind_int64(1, key)
+        .and_then(|_| col_vrsn_stmt.bind_text(2, col_name, sqlite::Destructor::STATIC));
     if let Err(rc) = bind_result {
-        reset_cached_stmt(col_vrsn_stmt.stmt)?;
-        return Err(rc);
-    }
-    if let Err(rc) = col_vrsn_stmt.bind_text(2, col_name, sqlite::Destructor::STATIC) {
         reset_cached_stmt(col_vrsn_stmt.stmt)?;
         return Err(rc);
     }
@@ -98,13 +96,10 @@ fn did_cid_win(
                 let col_site_id_stmt_ref = tbl_info.get_col_site_id_stmt(db)?;
                 let col_site_id_stmt = col_site_id_stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
 
-                let bind_result = col_site_id_stmt.bind_int64(1, key);
+                let bind_result = col_site_id_stmt.bind_int64(1, key).and_then(|_| {
+                    col_site_id_stmt.bind_text(2, col_name, sqlite::Destructor::STATIC)
+                });
                 if let Err(rc) = bind_result {
-                    reset_cached_stmt(col_site_id_stmt.stmt)?;
-                    return Err(rc);
-                }
-                if let Err(rc) = col_site_id_stmt.bind_text(2, col_name, sqlite::Destructor::STATIC)
-                {
                     reset_cached_stmt(col_site_id_stmt.stmt)?;
                     return Err(rc);
                 }
@@ -171,38 +166,58 @@ fn set_winner_clock(
         if insert_site_id.is_empty() {
             None
         } else {
-            (*ext_data).pSelectSiteIdOrdinalStmt.bind_blob(
+            let bind_result = (*ext_data).pSelectSiteIdOrdinalStmt.bind_blob(
                 1,
                 insert_site_id,
                 sqlite::Destructor::STATIC,
-            )?;
-            let rc = (*ext_data).pSelectSiteIdOrdinalStmt.step()?;
-            if rc == ResultCode::ROW {
-                let ordinal = (*ext_data).pSelectSiteIdOrdinalStmt.column_int64(0);
-                (*ext_data).pSelectSiteIdOrdinalStmt.clear_bindings()?;
-                (*ext_data).pSelectSiteIdOrdinalStmt.reset()?;
+            );
 
-                Some(ordinal)
-            } else {
-                (*ext_data).pSelectSiteIdOrdinalStmt.clear_bindings()?;
-                (*ext_data).pSelectSiteIdOrdinalStmt.reset()?;
-                // site id had no ordinal yet.
-                // set one and return the ordinal.
-                (*ext_data).pSetSiteIdOrdinalStmt.bind_blob(
-                    1,
-                    insert_site_id,
-                    sqlite::Destructor::STATIC,
-                )?;
-                let rc = (*ext_data).pSetSiteIdOrdinalStmt.step()?;
-                if rc == ResultCode::DONE {
-                    (*ext_data).pSetSiteIdOrdinalStmt.clear_bindings()?;
-                    (*ext_data).pSetSiteIdOrdinalStmt.reset()?;
-                    return Err(ResultCode::ABORT);
+            if let Err(rc) = bind_result {
+                reset_cached_stmt((*ext_data).pSelectSiteIdOrdinalStmt)?;
+                return Err(rc);
+            }
+
+            match (*ext_data).pSelectSiteIdOrdinalStmt.step() {
+                Ok(ResultCode::ROW) => {
+                    let ordinal = (*ext_data).pSelectSiteIdOrdinalStmt.column_int64(0);
+                    reset_cached_stmt((*ext_data).pSelectSiteIdOrdinalStmt)?;
+                    Some(ordinal)
                 }
-                let ordinal = (*ext_data).pSetSiteIdOrdinalStmt.column_int64(0);
-                (*ext_data).pSetSiteIdOrdinalStmt.clear_bindings()?;
-                (*ext_data).pSetSiteIdOrdinalStmt.reset()?;
-                Some(ordinal)
+                Ok(_) => {
+                    reset_cached_stmt((*ext_data).pSelectSiteIdOrdinalStmt)?;
+                    // site id had no ordinal yet.
+                    // set one and return the ordinal.
+                    let bind_result = (*ext_data).pSetSiteIdOrdinalStmt.bind_blob(
+                        1,
+                        insert_site_id,
+                        sqlite::Destructor::STATIC,
+                    );
+
+                    if let Err(rc) = bind_result {
+                        reset_cached_stmt((*ext_data).pSetSiteIdOrdinalStmt);
+                        return Err(rc);
+                    }
+
+                    match (*ext_data).pSetSiteIdOrdinalStmt.step() {
+                        Ok(ResultCode::DONE) => {
+                            reset_cached_stmt((*ext_data).pSetSiteIdOrdinalStmt)?;
+                            return Err(ResultCode::ABORT);
+                        }
+                        Ok(_) => {
+                            let ordinal = (*ext_data).pSetSiteIdOrdinalStmt.column_int64(0);
+                            reset_cached_stmt((*ext_data).pSetSiteIdOrdinalStmt)?;
+                            Some(ordinal)
+                        }
+                        Err(rc) => {
+                            reset_cached_stmt((*ext_data).pSetSiteIdOrdinalStmt)?;
+                            return Err(rc);
+                        }
+                    }
+                }
+                Err(rc) => {
+                    reset_cached_stmt((*ext_data).pSetSiteIdOrdinalStmt)?;
+                    return Err(rc);
+                }
             }
         }
     };
@@ -210,13 +225,9 @@ fn set_winner_clock(
     let set_stmt_ref = tbl_info.get_set_winner_clock_stmt(db)?;
     let set_stmt = set_stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
 
-    let bind_result = set_stmt.bind_int64(1, key);
-    if let Err(rc) = bind_result {
-        reset_cached_stmt(set_stmt.stmt)?;
-        return Err(rc);
-    }
     let bind_result = set_stmt
-        .bind_text(2, insert_col_name, sqlite::Destructor::STATIC)
+        .bind_int64(1, key)
+        .and_then(|_| set_stmt.bind_text(2, insert_col_name, sqlite::Destructor::STATIC))
         .and_then(|_| set_stmt.bind_int64(3, insert_col_vrsn))
         .and_then(|_| set_stmt.bind_int64(4, insert_db_vrsn))
         .and_then(|_| set_stmt.bind_int64(5, insert_seq))
@@ -266,18 +277,16 @@ fn merge_sentinel_only_insert(
         (*ext_data)
             .pSetSyncBitStmt
             .step()
-            .and_then(|_| (*ext_data).pSetSyncBitStmt.reset())
             .and_then(|_| merge_stmt.step())
     };
 
-    // TODO: report err?
-    let _ = reset_cached_stmt(merge_stmt.stmt);
+    unsafe { (*ext_data).pSetSyncBitStmt.reset()? };
+    reset_cached_stmt(merge_stmt.stmt)?;
 
     let sync_rc = unsafe {
-        (*ext_data)
-            .pClearSyncBitStmt
-            .step()
-            .and_then(|_| (*ext_data).pClearSyncBitStmt.reset())
+        let rc = (*ext_data).pClearSyncBitStmt.step();
+        (*ext_data).pClearSyncBitStmt.reset()?;
+        rc
     };
 
     if let Err(sync_rc) = sync_rc {
@@ -343,16 +352,14 @@ unsafe fn merge_delete(
     let rc = (*ext_data)
         .pSetSyncBitStmt
         .step()
-        .and_then(|_| (*ext_data).pSetSyncBitStmt.reset())
         .and_then(|_| delete_stmt.step());
 
+    (*ext_data).pSetSyncBitStmt.reset()?;
     reset_cached_stmt(delete_stmt.stmt)?;
 
-    let sync_rc = (*ext_data)
-        .pClearSyncBitStmt
-        .step()
-        .and_then(|_| (*ext_data).pClearSyncBitStmt.reset());
+    let sync_rc = (*ext_data).pClearSyncBitStmt.step();
 
+    (*ext_data).pClearSyncBitStmt.reset()?;
     if let Err(sync_rc) = sync_rc {
         return Err(sync_rc);
     }
@@ -407,12 +414,9 @@ fn get_local_cl(
     let local_cl_stmt_ref = tbl_info.get_local_cl_stmt(db)?;
     let local_cl_stmt = local_cl_stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
 
-    let rc = local_cl_stmt.bind_int64(1, key);
-    if let Err(rc) = rc {
-        reset_cached_stmt(local_cl_stmt.stmt)?;
-        return Err(rc);
-    }
-    let rc = local_cl_stmt.bind_int64(2, key);
+    let rc = local_cl_stmt
+        .bind_int64(1, key)
+        .and_then(|_| local_cl_stmt.bind_int64(2, key));
     if let Err(rc) = rc {
         reset_cached_stmt(local_cl_stmt.stmt)?;
         return Err(rc);
@@ -661,15 +665,14 @@ unsafe fn merge_insert(
     let rc = (*(*tab).pExtData)
         .pSetSyncBitStmt
         .step()
-        .and_then(|_| (*(*tab).pExtData).pSetSyncBitStmt.reset())
         .and_then(|_| merge_stmt.step());
 
     reset_cached_stmt(merge_stmt.stmt)?;
 
-    let sync_rc = (*(*tab).pExtData)
-        .pClearSyncBitStmt
-        .step()
-        .and_then(|_| (*(*tab).pExtData).pClearSyncBitStmt.reset());
+    let sync_rc = (*(*tab).pExtData).pClearSyncBitStmt.step();
+
+    (*(*tab).pExtData).pSetSyncBitStmt.reset();
+    (*(*tab).pExtData).pClearSyncBitStmt.reset();
 
     if let Err(rc) = rc {
         return Err(rc);

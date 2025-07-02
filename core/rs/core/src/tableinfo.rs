@@ -111,7 +111,10 @@ impl TableInfo {
         let stmt_ref = self.get_select_key_stmt(db)?;
         let stmt = stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
         for (i, pk) in pks.iter().enumerate() {
-            stmt.bind_value(i as i32 + 1, *pk)?;
+            if let Err(rc) = stmt.bind_value(i as i32 + 1, *pk) {
+                stmt.clear_bindings()?;
+                return Err(rc);
+            }
         }
         match stmt.step() {
             Ok(ResultCode::DONE) => {
@@ -141,7 +144,10 @@ impl TableInfo {
         let stmt_ref = self.get_insert_or_ignore_returning_key_stmt(db)?;
         let stmt = stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
         for (i, pk) in pks.iter().enumerate() {
-            stmt.bind_value(i as i32 + 1, *pk)?;
+            if let Err(rc) = stmt.bind_value(i as i32 + 1, *pk) {
+                stmt.clear_bindings()?;
+                return Err(rc);
+            }
         }
         match stmt.step() {
             Ok(ResultCode::DONE) => {
@@ -208,7 +214,10 @@ impl TableInfo {
         let stmt_ref = self.get_insert_key_stmt(db)?;
         let stmt = stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
         for (i, pk) in pks.iter().enumerate() {
-            stmt.bind_value(i as i32 + 1, *pk)?;
+            if let Err(rc) = stmt.bind_value(i as i32 + 1, *pk) {
+                stmt.clear_bindings()?;
+                return Err(rc);
+            }
         }
         match stmt.step() {
             Ok(ResultCode::ROW) => {
@@ -478,15 +487,15 @@ impl TableInfo {
             // from the old pk can override the ones from the new at a node
             // following our changes.
             let sql = format!(
-            "UPDATE OR REPLACE \"{table_name}__crsql_clock\" SET
-                key = ?,
-                db_version = ?,
-                seq = ?,
-                col_version = col_version + 1,
-                site_id = 0
-            WHERE
-                key = ? AND col_name = ?",
-              table_name = crate::util::escape_ident(&self.tbl_name),
+                "UPDATE OR REPLACE \"{table_name}__crsql_clock\" SET
+                    key = ?,
+                    db_version = ?,
+                    seq = ?,
+                    col_version = col_version + 1,
+                    site_id = 0
+                WHERE
+                    key = ? AND col_name = ?",
+                table_name = crate::util::escape_ident(&self.tbl_name),
             );
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
             *self.move_non_sentinels_stmt.try_borrow_mut()? = Some(ret);
