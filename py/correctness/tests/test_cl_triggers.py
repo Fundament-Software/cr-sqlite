@@ -32,7 +32,7 @@ def sync_left_to_right(l, r, since):
         "SELECT * FROM crsql_changes WHERE db_version > ?", (since,))
     for change in changes:
         r.execute(
-            "INSERT INTO crsql_changes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", change)
+            "INSERT INTO crsql_changes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", change)
     r.commit()
 
 # The idea here is that we are using an upsert to create a row that has never existing in our db
@@ -278,7 +278,7 @@ def test_change_primary_key_to_something_new():
 
     assert (c1.execute("SELECT * FROM foo").fetchall() ==
             c2.execute("SELECT * FROM foo").fetchall())
-    
+
     close(c1)
     close(c2)
 
@@ -389,19 +389,19 @@ def test_change_primary_key_from_another_db():
 
     c2.execute("UPDATE OR REPLACE foo SET a = 3 WHERE a = 1")
     c2.commit()
-    assert (c2.execute("SELECT crsql_db_version()").fetchone()[0] == 2)
-    sync_left_to_right(c2, c1, 1)
+    assert (c2.execute("SELECT crsql_db_version()").fetchone()[0] == 1)
+    sync_left_to_right(c2, c1, 0)
 
     changes = c2.execute(
         "SELECT pk, cid, cl FROM crsql_changes").fetchall()
     changes1 = c1.execute(
         "SELECT pk, cid, cl FROM crsql_changes").fetchall()
     # pk 2 is alive as we `update or replaced` to it
-    # and it is alive at version 3 given it iassert (changes2 == changes)s a re-insertion of the currently existing row
+    # and it is alive at version 3 given it is a re-insertion of the currently existing row
     # pk 1 is dead (cl of 2) given we mutated / updated away from it. E.g.,
     # set a = 2 where a = 1
-    assert (changes == [(b'\x01\t\x02', 'b', 1), (b'\x01\t\x01', '-1', 2), (b'\x01\t\x03', '-1', 1),
-                        (b'\x01\t\x03', 'b', 1)])
+    assert (changes == [ (b'\x01\t\x01', '-1', 2), (b'\x01\t\x03', '-1', 1),
+                        (b'\x01\t\x02', 'b', 1),(b'\x01\t\x03', 'b', 1)])
     # assert (changes2 == changes)
 
     # Verify both nodes have same data after final sync

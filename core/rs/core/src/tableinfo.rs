@@ -58,10 +58,13 @@ pub struct TableInfo {
     zero_clocks_on_resurrect_stmt: RefCell<Option<ManagedStmt>>,
 
     // For local writes --
+    combo_insert_clock_stmt: RefCell<Option<ManagedStmt>>,
+    select_clock_stmt: RefCell<Option<ManagedStmt>>,
+    insert_clock_stmt: RefCell<Option<ManagedStmt>>,
+    update_clock_stmt: RefCell<Option<ManagedStmt>>,
     mark_locally_deleted_stmt: RefCell<Option<ManagedStmt>>,
     move_non_sentinels_stmt: RefCell<Option<ManagedStmt>>,
     mark_locally_created_stmt: RefCell<Option<ManagedStmt>>,
-    mark_locally_updated_stmt: RefCell<Option<ManagedStmt>>,
     maybe_mark_locally_reinserted_stmt: RefCell<Option<ManagedStmt>>,
 }
 
@@ -163,11 +166,11 @@ impl TableInfo {
                     ResultCode::ROW => {
                         let ret = stmt.column_int64(0);
                         reset_cached_stmt(stmt.stmt)?;
-                        return Ok((true, ret));
+                        Ok((true, ret))
                     }
                     _ => {
                         reset_cached_stmt(stmt.stmt)?;
-                        return Err(ret);
+                        Err(ret)
                     }
                 }
             }
@@ -175,11 +178,11 @@ impl TableInfo {
                 // return it
                 let ret = stmt.column_int64(0);
                 reset_cached_stmt(stmt.stmt)?;
-                return Ok((false, ret));
+                Ok((false, ret))
             }
             Ok(rc) | Err(rc) => {
                 reset_cached_stmt(stmt.stmt)?;
-                return Err(rc);
+                Err(rc)
             }
         }
     }
@@ -295,12 +298,13 @@ impl TableInfo {
         if self.set_winner_clock_stmt.try_borrow()?.is_none() {
             let sql = format!(
                 "INSERT OR REPLACE INTO \"{table_name}__crsql_clock\"
-              (key, col_name, col_version, db_version, seq, site_id)
+              (key, col_name, col_version, db_version, seq, site_id, ts)
               VALUES (
                 ?,
                 ?,
                 ?,
-                crsql_next_db_version(?),
+                ?,
+                ?,
                 ?,
                 ?
               ) RETURNING key",
@@ -417,7 +421,7 @@ impl TableInfo {
     ) -> Result<Ref<Option<ManagedStmt>>, ResultCode> {
         if self.zero_clocks_on_resurrect_stmt.try_borrow()?.is_none() {
             let sql = format!(
-              "UPDATE \"{table_name}__crsql_clock\" SET col_version = 0, db_version = crsql_next_db_version(?) WHERE key = ? AND col_name IS NOT '{sentinel}'",
+              "UPDATE \"{table_name}__crsql_clock\" SET col_version = 0 WHERE key = ? AND col_name IS NOT '{sentinel}'",
               table_name = crate::util::escape_ident(&self.tbl_name),
               sentinel = crate::c::INSERT_SENTINEL
             );
@@ -439,19 +443,22 @@ impl TableInfo {
             col_version,
             db_version,
             seq,
-            site_id
+            site_id,
+            ts
           ) SELECT
             ?,
             '{sentinel}',
             2,
             ?,
             ?,
-            0 WHERE true
+            0,
+            ? WHERE true
           ON CONFLICT DO UPDATE SET
             col_version = 1 + col_version,
-            db_version = ?,
-            seq = ?,
-            site_id = 0",
+            db_version = excluded.db_version,
+            seq = excluded.seq,
+            site_id = 0,
+            ts = excluded.ts",
                 table_name = crate::util::escape_ident(&self.tbl_name),
                 sentinel = crate::c::DELETE_SENTINEL,
             );
@@ -488,13 +495,14 @@ impl TableInfo {
             // following our changes.
             let sql = format!(
                 "UPDATE OR REPLACE \"{table_name}__crsql_clock\" SET
-                    key = ?,
-                    db_version = ?,
-                    seq = ?,
-                    col_version = col_version + 1,
-                    site_id = 0
-                WHERE
-                    key = ? AND col_name = ?",
+                key = ?,
+                db_version = ?,
+                seq = ?,
+                col_version = col_version + 1,
+                site_id = 0,
+                ts = ?
+            WHERE
+                key = ? AND col_name = ?",
                 table_name = crate::util::escape_ident(&self.tbl_name),
             );
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
@@ -515,19 +523,22 @@ impl TableInfo {
                 col_version,
                 db_version,
                 seq,
-                site_id
+                site_id,
+                ts
               ) SELECT
                 ?,
                 '{sentinel}',
                 1,
                 ?,
                 ?,
-                0 WHERE true
+                0,
+                ? WHERE true
                 ON CONFLICT DO UPDATE SET
                   col_version = CASE col_version % 2 WHEN 0 THEN col_version + 1 ELSE col_version + 2 END,
-                  db_version = ?,
-                  seq = ?,
-                  site_id = 0",
+                  db_version = excluded.db_version,
+                  seq = excluded.seq,
+                  site_id = 0,
+                  ts = excluded.ts",
               table_name = crate::util::escape_ident(&self.tbl_name),
               sentinel = crate::c::INSERT_SENTINEL,
             );
@@ -537,37 +548,82 @@ impl TableInfo {
         Ok(self.mark_locally_created_stmt.try_borrow()?)
     }
 
-    pub fn get_mark_locally_updated_stmt(
+    pub fn get_combo_insert_clock_stmt(
         &self,
         db: *mut sqlite3,
     ) -> Result<Ref<Option<ManagedStmt>>, ResultCode> {
-        if self.mark_locally_updated_stmt.try_borrow()?.is_none() {
+        if self.combo_insert_clock_stmt.try_borrow()?.is_none() {
             let sql = format!(
-                "INSERT INTO \"{table_name}__crsql_clock\" (
-              key,
-              col_name,
-              col_version,
-              db_version,
-              seq,
-              site_id
-            ) SELECT
-              ?,
-              ?,
-              1,
-              ?,
-              ?,
-              0 WHERE true
-            ON CONFLICT DO UPDATE SET
-              col_version = col_version + 1,
-              db_version = ?,
-              seq = ?,
-              site_id = 0;",
+                "INSERT OR IGNORE INTO \"{table_name}__crsql_clock\" (
+                    key, col_name, col_version, db_version, seq, site_id, ts
+                ) VALUES {values};",
+                values = self
+                    .non_pks
+                    .iter()
+                    .map(|_col| "(?, ?, 1, ?, ?, 0, ?)")
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                table_name = crate::util::escape_ident(&self.tbl_name)
+            );
+            let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
+            *self.combo_insert_clock_stmt.try_borrow_mut()? = Some(ret);
+        }
+        Ok(self.combo_insert_clock_stmt.try_borrow()?)
+    }
+
+    pub fn get_select_clock_stmt(
+        &self,
+        db: *mut sqlite3,
+    ) -> Result<Ref<Option<ManagedStmt>>, ResultCode> {
+        if self.select_clock_stmt.try_borrow()?.is_none() {
+            let sql = format!(
+                "SELECT 1 FROM \"{table_name}__crsql_clock\"
+                    WHERE key = ? AND col_name = ? LIMIT 1;",
                 table_name = crate::util::escape_ident(&self.tbl_name),
             );
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
-            *self.mark_locally_updated_stmt.try_borrow_mut()? = Some(ret);
+            *self.select_clock_stmt.try_borrow_mut()? = Some(ret);
         }
-        Ok(self.mark_locally_updated_stmt.try_borrow()?)
+        Ok(self.select_clock_stmt.try_borrow()?)
+    }
+
+    pub fn get_insert_clock_stmt(
+        &self,
+        db: *mut sqlite3,
+    ) -> Result<Ref<Option<ManagedStmt>>, ResultCode> {
+        if self.insert_clock_stmt.try_borrow()?.is_none() {
+            let sql = format!(
+                "INSERT INTO \"{table_name}__crsql_clock\" (
+                    key, col_name, col_version, db_version, seq, site_id, ts
+                ) VALUES (?, ?, 1, ?, ?, 0, ?);",
+                table_name = crate::util::escape_ident(&self.tbl_name),
+            );
+            let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
+            *self.insert_clock_stmt.try_borrow_mut()? = Some(ret);
+        }
+        Ok(self.insert_clock_stmt.try_borrow()?)
+    }
+
+    pub fn get_update_clock_stmt(
+        &self,
+        db: *mut sqlite3,
+    ) -> Result<Ref<Option<ManagedStmt>>, ResultCode> {
+        if self.update_clock_stmt.try_borrow()?.is_none() {
+            let sql = format!(
+                "UPDATE \"{table_name}__crsql_clock\"
+                SET
+                    col_version = col_version + 1,
+                    db_version = ?,
+                    seq = ?,
+                    site_id = 0,
+                    ts = ?
+                WHERE key = ? AND col_name = ?;",
+                table_name = crate::util::escape_ident(&self.tbl_name),
+            );
+            let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
+            *self.update_clock_stmt.try_borrow_mut()? = Some(ret);
+        }
+        Ok(self.update_clock_stmt.try_borrow()?)
     }
 
     pub fn get_maybe_mark_locally_reinserted_stmt(
@@ -584,7 +640,8 @@ impl TableInfo {
                 col_version = CASE col_version % 2 WHEN 0 THEN col_version + 1 ELSE col_version + 2 END,
                 db_version = ?,
                 seq = ?,
-                site_id = 0
+                site_id = 0,
+                ts = ?
               WHERE key = ? AND col_name = ?",
               table_name = crate::util::escape_ident(&self.tbl_name),
             );
@@ -643,7 +700,13 @@ impl TableInfo {
         stmt.take();
         let mut stmt = self.mark_locally_created_stmt.try_borrow_mut()?;
         stmt.take();
-        let mut stmt = self.mark_locally_updated_stmt.try_borrow_mut()?;
+        let mut stmt = self.select_clock_stmt.try_borrow_mut()?;
+        stmt.take();
+        let mut stmt = self.combo_insert_clock_stmt.try_borrow_mut()?;
+        stmt.take();
+        let mut stmt = self.insert_clock_stmt.try_borrow_mut()?;
+        stmt.take();
+        let mut stmt = self.update_clock_stmt.try_borrow_mut()?;
         stmt.take();
         let mut stmt = self.maybe_mark_locally_reinserted_stmt.try_borrow_mut()?;
         stmt.take();
@@ -936,8 +999,11 @@ pub fn pull_table_info(
         mark_locally_deleted_stmt: RefCell::new(None),
         move_non_sentinels_stmt: RefCell::new(None),
         mark_locally_created_stmt: RefCell::new(None),
-        mark_locally_updated_stmt: RefCell::new(None),
         maybe_mark_locally_reinserted_stmt: RefCell::new(None),
+        combo_insert_clock_stmt: RefCell::new(None),
+        select_clock_stmt: RefCell::new(None),
+        insert_clock_stmt: RefCell::new(None),
+        update_clock_stmt: RefCell::new(None),
     })
 }
 
