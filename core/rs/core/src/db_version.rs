@@ -9,18 +9,16 @@ use alloc::string::String;
 use core::ffi::{c_char, c_int};
 use sqlite::ResultCode;
 use sqlite::StrRef;
-use sqlite::{sqlite3, Stmt};
+use sqlite::{Stmt, sqlite3};
 use sqlite_nostd as sqlite;
 
 use crate::c::crsql_ExtData;
 use crate::c::crsql_fetchPragmaDataVersion;
-use crate::c::crsql_fetchPragmaSchemaVersion;
-use crate::c::DB_VERSION_SCHEMA_VERSION;
 use crate::consts::MIN_POSSIBLE_DB_VERSION;
 use crate::consts::SITE_ID_LEN;
-use crate::ext_data::recreate_db_version_stmt;
 use crate::stmt_cache::reset_cached_stmt;
-#[no_mangle]
+
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_fill_db_version_if_needed(
     db: *mut sqlite3,
     ext_data: *mut crsql_ExtData,
@@ -35,7 +33,7 @@ pub extern "C" fn crsql_fill_db_version_if_needed(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_next_db_version(
     db: *mut sqlite3,
     ext_data: *mut crsql_ExtData,
@@ -50,7 +48,7 @@ pub extern "C" fn crsql_next_db_version(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_peek_next_db_version(
     db: *mut sqlite3,
     ext_data: *mut crsql_ExtData,
@@ -135,7 +133,7 @@ pub fn fill_db_version_if_needed(
 }
 
 pub fn fetch_db_version_from_storage(
-    db: *mut sqlite3,
+    _db: *mut sqlite3,
     ext_data: *mut crsql_ExtData,
 ) -> Result<ResultCode, String> {
     unsafe {
@@ -183,13 +181,13 @@ pub fn fetch_db_version_from_storage(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_init_last_db_versions_map(ext_data: *mut crsql_ExtData) {
     let map: BTreeMap<Vec<u8>, i64> = BTreeMap::new();
     unsafe { (*ext_data).lastDbVersions = Box::into_raw(Box::new(map)) as *mut c_void }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_drop_last_db_versions_map(ext_data: *mut crsql_ExtData) {
     unsafe {
         drop(Box::from_raw(

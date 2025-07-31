@@ -1,0 +1,22 @@
+[package]
+name = "cr-sqlite-sys"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+links = "sqlite"
+
+[lib]
+path = "lib.rs"
+
+[features]
+default = []
+
+[dependencies]
+crsql_bundle = { path = "../rs/bundle" }
+
+[dev-dependencies]
+eyre.workspace = true
+
+[build-dependencies]
+eyre.workspace = true
+cc.workspace = true

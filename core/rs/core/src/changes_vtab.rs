@@ -2,12 +2,12 @@ extern crate alloc;
 use crate::alloc::string::ToString;
 use crate::changes_vtab_write::crsql_merge_insert;
 use crate::stmt_cache::reset_cached_stmt;
-use crate::tableinfo::{crsql_ensure_table_infos_are_up_to_date, TableInfo};
+use crate::tableinfo::{TableInfo, crsql_ensure_table_infos_are_up_to_date};
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::ffi::{c_char, c_int, CStr};
+use core::ffi::{CStr, c_char, c_int};
 use core::mem::{self, forget};
 use core::ptr::null_mut;
 
@@ -19,7 +19,7 @@ use sqlite_nostd as sqlite;
 use sqlite_nostd::ResultCode;
 
 use crate::c::{
-    crsql_Changes_cursor, crsql_Changes_vtab, ChangeRowType, ClockUnionColumn, CrsqlChangesColumn,
+    ChangeRowType, ClockUnionColumn, CrsqlChangesColumn, crsql_Changes_cursor, crsql_Changes_vtab,
 };
 use crate::changes_vtab_read::changes_union_query;
 use crate::pack_columns::bind_package_to_stmt;
@@ -47,7 +47,7 @@ fn changes_crsr_finalize(crsr: *mut crsql_Changes_cursor) -> c_int {
 }
 
 // A very c-style port. We can get more idiomatic once we finish the rust port and have test and perf parity
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn crsql_changes_best_index(
     vtab: *mut sqlite::vtab,
     index_info: *mut sqlite::index_info,
@@ -172,7 +172,8 @@ fn changes_best_index(
         (*index_info).idxNum = idx_num;
         (*index_info).orderByConsumed = if order_by_consumed { 1 } else { 0 };
         // forget str
-        let (ptr, _, _) = str.into_raw_parts();
+        let ptr = str.as_ptr();
+        core::mem::forget(str);
         // pass to c. We've manually null terminated the string.
         // sqlite will free it for us.
         (*index_info).idxStr = ptr as *mut c_char;
@@ -182,7 +183,7 @@ fn changes_best_index(
     Ok(ResultCode::OK)
 }
 
-fn constraint_is_usable(constraint: &sqlite::index_constraint) -> bool {
+fn constraint_is_usable(constraint: &sqlite::bindings::sqlite3_index_constraint) -> bool {
     if constraint.usable == 0 {
         return false;
     }
@@ -215,7 +216,7 @@ fn get_clock_table_col_name(col: &Option<CrsqlChangesColumn>) -> Option<String> 
 
 fn get_operator_string(op: u8) -> Option<String> {
     // TODO: convert to proper enum
-    match op as u32 {
+    match op as i32 {
         sqlite::INDEX_CONSTRAINT_EQ => Some("=".to_string()),
         sqlite::INDEX_CONSTRAINT_GT => Some(">".to_string()),
         sqlite::INDEX_CONSTRAINT_LE => Some("<=".to_string()),
@@ -235,7 +236,7 @@ fn get_operator_string(op: u8) -> Option<String> {
 }
 
 // This'll become safe once more code is moved over to Rust
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn crsql_changes_filter(
     cursor: *mut sqlite::vtab_cursor,
     _idx_num: c_int,
@@ -247,7 +248,7 @@ pub unsafe extern "C" fn crsql_changes_filter(
     let cursor = cursor.cast::<crsql_Changes_cursor>();
     let idx_str = unsafe { CStr::from_ptr(idx_str).to_str() };
     match idx_str {
-        Ok(idx_str) => match changes_filter(cursor, idx_str, args) {
+        Ok(idx_str) => match unsafe { changes_filter(cursor, idx_str, args) } {
             Err(rc) | Ok(rc) => rc as c_int,
         },
         Err(_) => ResultCode::FORMAT as c_int,
@@ -259,61 +260,65 @@ unsafe fn changes_filter(
     idx_str: &str,
     args: &[*mut sqlite::value],
 ) -> Result<ResultCode, ResultCode> {
-    let tab = (*cursor).pTab;
-    let db = (*tab).db;
-    // This should never happen. pChangesStmt should be finalized
-    // before filter is ever invoked.
-    if !(*cursor).pChangesStmt.is_null() {
-        (*cursor).pChangesStmt.finalize()?;
-        (*cursor).pChangesStmt = null_mut();
-    }
-
-    let c_rc = crsql_ensure_table_infos_are_up_to_date(
-        db,
-        (*tab).pExtData,
-        &mut (*tab).base.zErrMsg as *mut _,
-    );
-    if c_rc != 0 {
-        if let Some(rc) = ResultCode::from_i32(c_rc) {
-            return Err(rc);
-        } else {
-            return Err(ResultCode::ERROR);
+    unsafe {
+        let tab = (*cursor).pTab;
+        let db = (*tab).db;
+        // This should never happen. pChangesStmt should be finalized
+        // before filter is ever invoked.
+        if !(*cursor).pChangesStmt.is_null() {
+            (*cursor).pChangesStmt.finalize()?;
+            (*cursor).pChangesStmt = null_mut();
         }
-    }
 
-    // nothing to fetch, no crrs exist.
-    let tbl_infos = mem::ManuallyDrop::new(Box::from_raw(
-        (*(*tab).pExtData).tableInfos as *mut Vec<TableInfo>,
-    ));
-    if tbl_infos.len() == 0 {
-        return Ok(ResultCode::OK);
-    }
+        let c_rc = crsql_ensure_table_infos_are_up_to_date(
+            db,
+            (*tab).pExtData,
+            &mut (*tab).base.zErrMsg as *mut _,
+        );
+        if c_rc != 0 {
+            if let Some(rc) = ResultCode::from_i32(c_rc) {
+                return Err(rc);
+            } else {
+                return Err(ResultCode::ERROR);
+            }
+        }
 
-    let sql = changes_union_query(&tbl_infos, idx_str)?;
+        // nothing to fetch, no crrs exist.
+        let tbl_infos = mem::ManuallyDrop::new(Box::from_raw(
+            (*(*tab).pExtData).tableInfos as *mut Vec<TableInfo>,
+        ));
+        if tbl_infos.len() == 0 {
+            return Ok(ResultCode::OK);
+        }
 
-    let stmt = db.prepare_v2(&sql)?;
-    for (i, arg) in args.iter().enumerate() {
-        stmt.bind_value(i as i32 + 1, *arg)?;
+        let sql = changes_union_query(&tbl_infos, idx_str)?;
+
+        let stmt = db.prepare_v2(&sql)?;
+        for (i, arg) in args.iter().enumerate() {
+            stmt.bind_value(i as i32 + 1, *arg)?;
+        }
+        (*cursor).pChangesStmt = stmt.stmt;
+        // forget the stmt. it will be managed by the vtab
+        forget(stmt);
+        changes_next(cursor, (*cursor).pTab.cast::<sqlite::vtab>())
     }
-    (*cursor).pChangesStmt = stmt.stmt;
-    // forget the stmt. it will be managed by the vtab
-    forget(stmt);
-    changes_next(cursor, (*cursor).pTab.cast::<sqlite::vtab>())
 }
 
 /**
  * Advances our Changes_cursor to its next row of output.
  * TODO: this'll get more idiomatic as we move dependencies to Rust
  */
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn crsql_changes_next(cursor: *mut sqlite::vtab_cursor) -> c_int {
-    let cursor = cursor.cast::<crsql_Changes_cursor>();
-    let vtab = (*cursor).pTab.cast::<sqlite::vtab>();
-    match changes_next(cursor, vtab) {
-        Ok(rc) => rc as c_int,
-        Err(rc) => {
-            changes_crsr_finalize(cursor);
-            rc as c_int
+    unsafe {
+        let cursor = cursor.cast::<crsql_Changes_cursor>();
+        let vtab = (*cursor).pTab.cast::<sqlite::vtab>();
+        match changes_next(cursor, vtab) {
+            Ok(rc) => rc as c_int,
+            Err(rc) => {
+                changes_crsr_finalize(cursor);
+                rc as c_int
+            }
         }
     }
 }
@@ -323,103 +328,105 @@ unsafe fn changes_next(
     cursor: *mut crsql_Changes_cursor,
     vtab: *mut sqlite::vtab,
 ) -> Result<ResultCode, ResultCode> {
-    if (*cursor).pChangesStmt.is_null() {
-        let err = CString::new("pChangesStmt is null in changes_next")?;
-        (*vtab).zErrMsg = err.into_raw();
-        return Err(ResultCode::ABORT);
-    }
+    unsafe {
+        if (*cursor).pChangesStmt.is_null() {
+            let err = CString::new("pChangesStmt is null in changes_next")?;
+            (*vtab).zErrMsg = err.into_raw();
+            return Err(ResultCode::ABORT);
+        }
 
-    if !(*cursor).pRowStmt.is_null() {
-        let rc = reset_cached_stmt((*cursor).pRowStmt);
-        (*cursor).pRowStmt = null_mut();
-        rc?;
-    }
+        if !(*cursor).pRowStmt.is_null() {
+            let rc = reset_cached_stmt((*cursor).pRowStmt);
+            (*cursor).pRowStmt = null_mut();
+            rc?;
+        }
 
-    let rc = (*cursor).pChangesStmt.step()?;
-    if rc == ResultCode::DONE {
-        let c_rc = changes_crsr_finalize(cursor);
-        if c_rc == 0 {
-            return Ok(ResultCode::OK);
-        } else {
+        let rc = (*cursor).pChangesStmt.step()?;
+        if rc == ResultCode::DONE {
+            let c_rc = changes_crsr_finalize(cursor);
+            if c_rc == 0 {
+                return Ok(ResultCode::OK);
+            } else {
+                return Err(ResultCode::ERROR);
+            }
+        }
+
+        // we had a row... we can do the rest
+        let tbl = (*cursor)
+            .pChangesStmt
+            .column_text(ClockUnionColumn::Tbl as i32);
+        let pks = (*cursor)
+            .pChangesStmt
+            .column_value(ClockUnionColumn::Pks as i32);
+        let cid = (*cursor)
+            .pChangesStmt
+            .column_text(ClockUnionColumn::Cid as i32);
+        let db_version = (*cursor)
+            .pChangesStmt
+            .column_int64(ClockUnionColumn::DbVrsn as i32);
+        let changes_rowid = (*cursor)
+            .pChangesStmt
+            .column_int64(ClockUnionColumn::RowId as i32);
+        (*cursor).dbVersion = db_version;
+
+        let tbl_infos = mem::ManuallyDrop::new(Box::from_raw(
+            (*(*(*cursor).pTab).pExtData).tableInfos as *mut Vec<TableInfo>,
+        ));
+        // TODO: will this work given `insert_tbl` is null termed?
+        let tbl_info_index = tbl_infos.iter().position(|x| x.tbl_name == tbl);
+
+        if tbl_info_index.is_none() {
+            let err = CString::new(format!("could not find schema for table {}", tbl))?;
+            (*vtab).zErrMsg = err.into_raw();
             return Err(ResultCode::ERROR);
         }
-    }
+        // TODO: technically safe since we checked `is_none` but this should be more idiomatic
+        let tbl_info_index = tbl_info_index.unwrap();
 
-    // we had a row... we can do the rest
-    let tbl = (*cursor)
-        .pChangesStmt
-        .column_text(ClockUnionColumn::Tbl as i32);
-    let pks = (*cursor)
-        .pChangesStmt
-        .column_value(ClockUnionColumn::Pks as i32);
-    let cid = (*cursor)
-        .pChangesStmt
-        .column_text(ClockUnionColumn::Cid as i32);
-    let db_version = (*cursor)
-        .pChangesStmt
-        .column_int64(ClockUnionColumn::DbVrsn as i32);
-    let changes_rowid = (*cursor)
-        .pChangesStmt
-        .column_int64(ClockUnionColumn::RowId as i32);
-    (*cursor).dbVersion = db_version;
+        let tbl_info = &tbl_infos[tbl_info_index];
+        (*cursor).changesRowid = changes_rowid;
+        (*cursor).tblInfoIdx = tbl_info_index as i32;
 
-    let tbl_infos = mem::ManuallyDrop::new(Box::from_raw(
-        (*(*(*cursor).pTab).pExtData).tableInfos as *mut Vec<TableInfo>,
-    ));
-    // TODO: will this work given `insert_tbl` is null termed?
-    let tbl_info_index = tbl_infos.iter().position(|x| x.tbl_name == tbl);
-
-    if tbl_info_index.is_none() {
-        let err = CString::new(format!("could not find schema for table {}", tbl))?;
-        (*vtab).zErrMsg = err.into_raw();
-        return Err(ResultCode::ERROR);
-    }
-    // TODO: technically safe since we checked `is_none` but this should be more idiomatic
-    let tbl_info_index = tbl_info_index.unwrap();
-
-    let tbl_info = &tbl_infos[tbl_info_index];
-    (*cursor).changesRowid = changes_rowid;
-    (*cursor).tblInfoIdx = tbl_info_index as i32;
-
-    if tbl_info.pks.is_empty() {
-        let err = CString::new(format!("crr {} is missing primary keys", tbl))?;
-        (*vtab).zErrMsg = err.into_raw();
-        return Err(ResultCode::ERROR);
-    }
-
-    if cid == crate::c::DELETE_SENTINEL {
-        (*cursor).rowType = ChangeRowType::Delete as c_int;
-        return Ok(ResultCode::OK);
-    } else if cid == crate::c::INSERT_SENTINEL {
-        (*cursor).rowType = ChangeRowType::PkOnly as c_int;
-        return Ok(ResultCode::OK);
-    } else {
-        (*cursor).rowType = ChangeRowType::Update as c_int;
-    }
-
-    let row_stmt_ref = tbl_info.get_row_patch_data_stmt((*(*cursor).pTab).db, cid)?;
-    let row_stmt = row_stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
-
-    let packed_pks = pks.blob();
-    let unpacked_pks = unpack_columns(packed_pks)?;
-    bind_package_to_stmt(row_stmt.stmt, &unpacked_pks, 0)?;
-
-    match row_stmt.step() {
-        Ok(ResultCode::DONE) => {
-            reset_cached_stmt(row_stmt.stmt)?;
+        if tbl_info.pks.is_empty() {
+            let err = CString::new(format!("crr {} is missing primary keys", tbl))?;
+            (*vtab).zErrMsg = err.into_raw();
+            return Err(ResultCode::ERROR);
         }
-        Ok(_) => {}
-        Err(rc) => {
-            reset_cached_stmt(row_stmt.stmt)?;
-            return Err(rc);
-        }
-    }
 
-    (*cursor).pRowStmt = row_stmt.stmt;
-    Ok(ResultCode::OK)
+        if cid == crate::c::DELETE_SENTINEL {
+            (*cursor).rowType = ChangeRowType::Delete as c_int;
+            return Ok(ResultCode::OK);
+        } else if cid == crate::c::INSERT_SENTINEL {
+            (*cursor).rowType = ChangeRowType::PkOnly as c_int;
+            return Ok(ResultCode::OK);
+        } else {
+            (*cursor).rowType = ChangeRowType::Update as c_int;
+        }
+
+        let row_stmt_ref = tbl_info.get_row_patch_data_stmt((*(*cursor).pTab).db, cid)?;
+        let row_stmt = row_stmt_ref.as_ref().ok_or(ResultCode::ERROR)?;
+
+        let packed_pks = pks.blob();
+        let unpacked_pks = unpack_columns(packed_pks)?;
+        bind_package_to_stmt(row_stmt.stmt, &unpacked_pks, 0)?;
+
+        match row_stmt.step() {
+            Ok(ResultCode::DONE) => {
+                reset_cached_stmt(row_stmt.stmt)?;
+            }
+            Ok(_) => {}
+            Err(rc) => {
+                reset_cached_stmt(row_stmt.stmt)?;
+                return Err(rc);
+            }
+        }
+
+        (*cursor).pRowStmt = row_stmt.stmt;
+        Ok(ResultCode::OK)
+    }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_changes_eof(cursor: *mut sqlite::vtab_cursor) -> c_int {
     let cursor = cursor.cast::<crsql_Changes_cursor>();
     if unsafe { (*cursor).pChangesStmt.is_null() } {
@@ -429,7 +436,7 @@ pub extern "C" fn crsql_changes_eof(cursor: *mut sqlite::vtab_cursor) -> c_int {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_changes_column(
     cursor: *mut sqlite::vtab_cursor, /* The cursor */
     ctx: *mut sqlite::context,        /* First argument to sqlite3_result_...() */
@@ -504,7 +511,7 @@ fn column_impl(
     Ok(ResultCode::OK)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_changes_rowid(
     cursor: *mut sqlite::vtab_cursor,
     rowid: *mut sqlite::int64,
@@ -519,7 +526,7 @@ pub extern "C" fn crsql_changes_rowid(
     ResultCode::OK as c_int
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_changes_update(
     vtab: *mut sqlite::vtab,
     argc: c_int,
@@ -552,12 +559,12 @@ pub extern "C" fn crsql_changes_update(
 }
 
 // If xBegin is not defined xCommit is not called.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_changes_begin(_vtab: *mut sqlite::vtab) -> c_int {
     ResultCode::OK as c_int
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_changes_commit(vtab: *mut sqlite::vtab) -> c_int {
     let tab = vtab.cast::<crsql_Changes_vtab>();
     unsafe {

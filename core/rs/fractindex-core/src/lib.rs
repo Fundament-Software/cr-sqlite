@@ -1,6 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(non_upper_case_globals)]
-#![feature(core_intrinsics)]
+//#![feature(core_intrinsics)]
 
 mod as_ordered;
 mod fractindex;
@@ -131,7 +131,7 @@ fn pull_collection_column_names(
     return &args[from..i];
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_crsqlfractionalindex_init(
     db: *mut sqlite::sqlite3,
     _err_msg: *mut *mut c_char,

@@ -13,7 +13,7 @@ use sqlite_nostd as sqlite;
  * Tests in a main crate because ubuntu is seriously fucked
  * and can't find `sqlite3_malloc` when compiling it as integration tests.
  */
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_integration_check() {
     println!("Running automigrate");
     t::automigrate::run_suite().expect("automigrate suite");

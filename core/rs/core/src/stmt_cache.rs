@@ -14,7 +14,7 @@ use crate::tableinfo::TableInfo;
 // Do not drop the table infos.
 // We do this explicitly since `drop` cannot return an error and we want to
 // return the error / not panic.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_clear_stmt_cache(ext_data: *mut crsql_ExtData) {
     let tbl_infos =
         unsafe { ManuallyDrop::new(Box::from_raw((*ext_data).tableInfos as *mut Vec<TableInfo>)) };
