@@ -11,25 +11,11 @@ name = "crsql_bundle_static"
 crate-type = ["staticlib"]
 
 [dependencies]
-crsql_bundle = {path="../bundle"}
-
-[profile.dev]
-panic = "abort"
-
-[profile.release]
-panic = "abort"
+crsql_bundle = { path = "../bundle" }
 
 [features]
 libsql = ["crsql_bundle/libsql"]
-test = [
-  "crsql_bundle/test"
-]
-loadable_extension = [
-  "crsql_bundle/loadable_extension"
-]
-static = [
-  "crsql_bundle/static"
-]
-omit_load_extension = [
-  "crsql_bundle/omit_load_extension"
-]
+test = ["crsql_bundle/test"]
+loadable_extension = ["crsql_bundle/loadable_extension"]
+static = ["crsql_bundle/static"]
+omit_load_extension = ["crsql_bundle/omit_load_extension"]

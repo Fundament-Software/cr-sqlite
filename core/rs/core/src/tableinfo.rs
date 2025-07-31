@@ -1,9 +1,9 @@
 use crate::alloc::string::ToString;
+use crate::c::TABLE_INFO_SCHEMA_VERSION;
 use crate::c::crsql_ExtData;
 use crate::c::crsql_fetchPragmaSchemaVersion;
-use crate::c::TABLE_INFO_SCHEMA_VERSION;
-use crate::pack_columns::bind_package_to_stmt;
 use crate::pack_columns::ColumnValue;
+use crate::pack_columns::bind_package_to_stmt;
 use crate::stmt_cache::reset_cached_stmt;
 use crate::util::Countable;
 use alloc::boxed::Box;
@@ -342,8 +342,8 @@ impl TableInfo {
     ) -> Result<Ref<Option<ManagedStmt>>, ResultCode> {
         if self.col_version_stmt.try_borrow()?.is_none() {
             let sql = format!(
-              "SELECT col_version FROM \"{table_name}__crsql_clock\" WHERE key = ? AND col_name = ?",
-              table_name = crate::util::escape_ident(&self.tbl_name),
+                "SELECT col_version FROM \"{table_name}__crsql_clock\" WHERE key = ? AND col_name = ?",
+                table_name = crate::util::escape_ident(&self.tbl_name),
             );
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
             *self.col_version_stmt.try_borrow_mut()? = Some(ret);
@@ -357,8 +357,8 @@ impl TableInfo {
     ) -> Result<Ref<Option<ManagedStmt>>, ResultCode> {
         if self.col_site_id_stmt.try_borrow()?.is_none() {
             let sql = format!(
-              "SELECT site_id FROM crsql_site_id WHERE ordinal = (SELECT site_id FROM \"{table_name}__crsql_clock\" WHERE key = ? AND col_name = ?)",
-              table_name = crate::util::escape_ident(&self.tbl_name),
+                "SELECT site_id FROM crsql_site_id WHERE ordinal = (SELECT site_id FROM \"{table_name}__crsql_clock\" WHERE key = ? AND col_name = ?)",
+                table_name = crate::util::escape_ident(&self.tbl_name),
             );
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
             *self.col_site_id_stmt.try_borrow_mut()? = Some(ret);
@@ -405,9 +405,9 @@ impl TableInfo {
     ) -> Result<Ref<Option<ManagedStmt>>, ResultCode> {
         if self.merge_delete_drop_clocks_stmt.try_borrow()?.is_none() {
             let sql = format!(
-              "DELETE FROM \"{table_name}__crsql_clock\" WHERE key = ? AND col_name IS NOT '{sentinel}'",
-              table_name = crate::util::escape_ident(&self.tbl_name),
-              sentinel = crate::c::DELETE_SENTINEL
+                "DELETE FROM \"{table_name}__crsql_clock\" WHERE key = ? AND col_name IS NOT '{sentinel}'",
+                table_name = crate::util::escape_ident(&self.tbl_name),
+                sentinel = crate::c::DELETE_SENTINEL
             );
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
             *self.merge_delete_drop_clocks_stmt.try_borrow_mut()? = Some(ret);
@@ -421,9 +421,9 @@ impl TableInfo {
     ) -> Result<Ref<Option<ManagedStmt>>, ResultCode> {
         if self.zero_clocks_on_resurrect_stmt.try_borrow()?.is_none() {
             let sql = format!(
-              "UPDATE \"{table_name}__crsql_clock\" SET col_version = 0 WHERE key = ? AND col_name IS NOT '{sentinel}'",
-              table_name = crate::util::escape_ident(&self.tbl_name),
-              sentinel = crate::c::INSERT_SENTINEL
+                "UPDATE \"{table_name}__crsql_clock\" SET col_version = 0 WHERE key = ? AND col_name IS NOT '{sentinel}'",
+                table_name = crate::util::escape_ident(&self.tbl_name),
+                sentinel = crate::c::INSERT_SENTINEL
             );
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
             *self.zero_clocks_on_resurrect_stmt.try_borrow_mut()? = Some(ret);
@@ -474,9 +474,9 @@ impl TableInfo {
     ) -> Result<Ref<Option<ManagedStmt>>, ResultCode> {
         if self.move_non_sentinels_stmt.try_borrow()?.is_none() {
             let sql = format!(
-              "UPDATE OR REPLACE \"{table_name}__crsql_clock\" SET key = ? WHERE key = ? AND col_name != '{sentinel}'",
-              table_name = crate::util::escape_ident(&self.tbl_name),
-              sentinel = crate::c::DELETE_SENTINEL,
+                "UPDATE OR REPLACE \"{table_name}__crsql_clock\" SET key = ? WHERE key = ? AND col_name != '{sentinel}'",
+                table_name = crate::util::escape_ident(&self.tbl_name),
+                sentinel = crate::c::DELETE_SENTINEL,
             );
             let ret = db.prepare_v3(&sql, sqlite::PREPARE_PERSISTENT)?;
             *self.move_non_sentinels_stmt.try_borrow_mut()? = Some(ret);
@@ -829,20 +829,20 @@ impl Drop for ColumnInfo {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_init_table_info_vec(ext_data: *mut crsql_ExtData) {
     let vec: Vec<TableInfo> = vec![];
     unsafe { (*ext_data).tableInfos = Box::into_raw(Box::new(vec)) as *mut c_void }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_drop_table_info_vec(ext_data: *mut crsql_ExtData) {
     unsafe {
         drop(Box::from_raw((*ext_data).tableInfos as *mut Vec<TableInfo>));
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_ensure_table_infos_are_up_to_date(
     db: *mut sqlite::sqlite3,
     ext_data: *mut crsql_ExtData,

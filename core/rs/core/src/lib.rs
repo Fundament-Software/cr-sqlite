@@ -1,5 +1,5 @@
 #![cfg_attr(not(test), no_std)]
-#![feature(vec_into_raw_parts)]
+//#![feature(vec_into_raw_parts)]
 
 // TODO: these pub mods are exposed for the integration testing
 // we should re-export in a `test` mod such that they do not become public apis
@@ -60,7 +60,7 @@ use automigrate::*;
 use backfill::*;
 use c::{crsql_freeExtData, crsql_newExtData};
 use config::{crsql_config_get, crsql_config_set};
-use core::ffi::{c_int, c_void, CStr};
+use core::ffi::{CStr, c_int, c_void};
 use create_crr::create_crr;
 use db_version::{
     crsql_fill_db_version_if_needed, crsql_next_db_version, crsql_peek_next_db_version,
@@ -112,7 +112,7 @@ fn crsql_as_table_impl(db: *mut sqlite::sqlite3, table: &str) -> Result<ResultCo
     remove_crr_triggers_if_exist(db, table)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn sqlite3_crsqlcore_init(
     db: *mut sqlite::sqlite3,
@@ -606,7 +606,7 @@ unsafe extern "C" fn x_crsql_site_id(
     _argv: *mut *mut sqlite::value,
 ) {
     let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
-    let site_id = (*ext_data).siteId;
+    let site_id = unsafe { (*ext_data).siteId };
     sqlite::result_blob(ctx, site_id, consts::SITE_ID_LEN, Destructor::STATIC);
 }
 
@@ -616,7 +616,7 @@ unsafe extern "C" fn x_crsql_finalize(
     _argv: *mut *mut sqlite::value,
 ) {
     let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
-    c::crsql_finalize(ext_data);
+    unsafe { c::crsql_finalize(ext_data) };
     ctx.result_text_static("finalized");
 }
 
@@ -682,7 +682,7 @@ unsafe extern "C" fn x_crsql_rows_impacted(
     _argv: *mut *mut sqlite::value,
 ) {
     let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
-    let rows_impacted = (*ext_data).rowsImpacted;
+    let rows_impacted = unsafe { (*ext_data).rowsImpacted };
     sqlite::result_int(ctx, rows_impacted);
 }
 
@@ -766,12 +766,14 @@ unsafe extern "C" fn x_crsql_commit_alter(
             Err(rc) => rc as c_int,
         }
     } else {
-        let rc = crsql_compact_post_alter(
-            db,
-            table_name.as_ptr() as *const c_char,
-            ext_data,
-            &mut err_msg as *mut _,
-        );
+        let rc = unsafe {
+            crsql_compact_post_alter(
+                db,
+                table_name.as_ptr() as *const c_char,
+                ext_data,
+                &mut err_msg as *mut _,
+            )
+        };
 
         if rc == ResultCode::OK as c_int {
             crsql_create_crr(
@@ -814,8 +816,10 @@ unsafe extern "C" fn x_crsql_get_seq(
     _argc: i32,
     _argv: *mut *mut sqlite::value,
 ) {
-    let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
-    ctx.result_int((*ext_data).seq);
+    unsafe {
+        let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
+        ctx.result_int((*ext_data).seq);
+    }
 }
 
 unsafe extern "C" fn x_crsql_increment_and_get_seq(
@@ -823,9 +827,11 @@ unsafe extern "C" fn x_crsql_increment_and_get_seq(
     _argc: i32,
     _argv: *mut *mut sqlite::value,
 ) {
-    let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
-    ctx.result_int((*ext_data).seq);
-    (*ext_data).seq += 1;
+    unsafe {
+        let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
+        ctx.result_int((*ext_data).seq);
+        (*ext_data).seq += 1;
+    }
 }
 
 /**
@@ -855,7 +861,9 @@ unsafe extern "C" fn x_crsql_set_ts(
         }
     };
     let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
-    (*ext_data).timestamp = ts_u64;
+    unsafe {
+        (*ext_data).timestamp = ts_u64;
+    }
     ctx.result_text_static("OK");
 }
 
@@ -865,7 +873,7 @@ unsafe extern "C" fn x_crsql_get_ts(
     _argv: *mut *mut sqlite::value,
 ) {
     let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
-    let ts = (*ext_data).timestamp.to_string();
+    let ts = unsafe { (*ext_data).timestamp.to_string() };
     ctx.result_text_transient(&ts);
 }
 
@@ -888,7 +896,9 @@ unsafe extern "C" fn x_crsql_db_version(
         ctx.result_error("failed to fill db version");
         return;
     }
-    sqlite::result_int64(ctx, (*ext_data).dbVersion);
+    unsafe {
+        sqlite::result_int64(ctx, (*ext_data).dbVersion);
+    }
 }
 
 /**
@@ -903,8 +913,8 @@ unsafe extern "C" fn x_crsql_db_version(
  */
 unsafe extern "C" fn x_crsql_next_db_version(
     ctx: *mut sqlite::context,
-    argc: i32,
-    argv: *mut *mut sqlite::value,
+    _argc: i32,
+    _argv: *mut *mut sqlite::value,
 ) {
     let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
     let db = ctx.db_handle();
@@ -962,8 +972,8 @@ unsafe extern "C" fn x_crsql_set_db_version(
  */
 unsafe extern "C" fn x_crsql_peek_next_db_version(
     ctx: *mut sqlite::context,
-    argc: i32,
-    argv: *mut *mut sqlite::value,
+    _argc: i32,
+    _argv: *mut *mut sqlite::value,
 ) {
     let ext_data = ctx.user_data() as *mut c::crsql_ExtData;
     let db = ctx.db_handle();
@@ -984,23 +994,25 @@ unsafe extern "C" fn x_crsql_peek_next_db_version(
  */
 unsafe extern "C" fn x_crsql_sha(
     ctx: *mut sqlite::context,
-    argc: i32,
-    argv: *mut *mut sqlite::value,
+    _argc: i32,
+    _argv: *mut *mut sqlite::value,
 ) {
     ctx.result_text_static(sha::SHA);
 }
 
-unsafe extern "C" fn x_crsql_version(
+pub unsafe extern "C" fn x_crsql_version(
     ctx: *mut sqlite::context,
-    argc: i32,
-    argv: *mut *mut sqlite::value,
+    _argc: i32,
+    _argv: *mut *mut sqlite::value,
 ) {
     ctx.result_int64(consts::CRSQLITE_VERSION as i64);
 }
 
 unsafe extern "C" fn x_free_connection_ext_data(data: *mut c_void) {
     let ext_data = data as *mut c::crsql_ExtData;
-    crsql_freeExtData(ext_data);
+    unsafe {
+        crsql_freeExtData(ext_data);
+    }
 }
 
 pub unsafe extern "C" fn crsql_sqlite_free(ptr: *mut c_void) {
@@ -1012,20 +1024,22 @@ unsafe extern "C" fn x_crsql_sync_bit(
     argc: i32,
     argv: *mut *mut sqlite::value,
 ) {
-    let sync_bit_ptr = ctx.user_data() as *mut c_int;
-    if argc != 1 {
+    unsafe {
+        let sync_bit_ptr = ctx.user_data() as *mut c_int;
+        if argc != 1 {
+            ctx.result_int(*sync_bit_ptr);
+            return;
+        }
+
+        let args = sqlite::args!(argc, argv);
+        let new_value = args[0].int();
+        *sync_bit_ptr = new_value;
+
         ctx.result_int(*sync_bit_ptr);
-        return;
     }
-
-    let args = sqlite::args!(argc, argv);
-    let new_value = args[0].int();
-    *sync_bit_ptr = new_value;
-
-    ctx.result_int(*sync_bit_ptr);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn crsql_is_crr(db: *mut sqlite::sqlite3, table: *const c_char) -> c_int {
     if let Ok(table) = unsafe { CStr::from_ptr(table).to_str() } {
@@ -1044,7 +1058,7 @@ pub extern "C" fn crsql_is_crr(db: *mut sqlite::sqlite3, table: *const c_char) -
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn crsql_is_table_compatible(
     db: *mut sqlite::sqlite3,
@@ -1060,7 +1074,7 @@ pub extern "C" fn crsql_is_table_compatible(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn crsql_create_crr(
     db: *mut sqlite::sqlite3,

@@ -1,6 +1,3 @@
-use alloc::format;
-use alloc::string::String;
-use core::ffi::c_void;
 use sqlite::{context, value};
 use sqlite_nostd as sqlite;
 
@@ -16,24 +13,26 @@ pub fn debug_log(msg: &str) {
 }
 
 pub unsafe extern "C" fn x_crsql_set_debug(ctx: *mut context, argc: i32, argv: *mut *mut value) {
-    if argc == 0 {
-        // If no arguments, return current state
-        sqlite::result_int(ctx, if DEBUG_ENABLED { 1 } else { 0 });
-        return;
+    unsafe {
+        if argc == 0 {
+            // If no arguments, return current state
+            sqlite::result_int(ctx, if DEBUG_ENABLED { 1 } else { 0 });
+            return;
+        }
+
+        if argc > 1 {
+            // Too many arguments
+            return;
+        }
+
+        let enabled = {
+            let arg = *argv;
+            sqlite::value_int(arg) != 0
+        };
+
+        DEBUG_ENABLED = enabled;
+
+        // Return success (the new state)
+        sqlite::result_int(ctx, if enabled { 1 } else { 0 });
     }
-
-    if argc > 1 {
-        // Too many arguments
-        return;
-    }
-
-    let enabled = {
-        let arg = *argv;
-        sqlite::value_int(arg) != 0
-    };
-
-    DEBUG_ENABLED = enabled;
-
-    // Return success (the new state)
-    sqlite::result_int(ctx, if enabled { 1 } else { 0 });
 }

@@ -14,7 +14,7 @@ fn uuid() -> [u8; 16] {
     blob
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_init_site_id(db: *mut sqlite3, ret: *mut u8) -> c_int {
     let buffer: &mut [u8] = unsafe { slice::from_raw_parts_mut(ret, 16) };
     if let Ok(site_id) = init_site_id(db) {
@@ -48,7 +48,7 @@ fn create_site_id_and_site_id_table(db: *mut sqlite3) -> Result<[u8; 16], Result
     insert_site_id(db)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_init_peer_tracking_table(db: *mut sqlite3) -> c_int {
     match db.exec_safe("CREATE TABLE IF NOT EXISTS crsql_tracked_peers (\"site_id\" BLOB NOT NULL, \"version\" INTEGER NOT NULL, \"seq\" INTEGER DEFAULT 0, \"tag\" INTEGER, \"event\" INTEGER, PRIMARY KEY (\"site_id\", \"tag\", \"event\")) STRICT;") {
       Ok(_) => ResultCode::OK as c_int,
@@ -56,7 +56,7 @@ pub extern "C" fn crsql_init_peer_tracking_table(db: *mut sqlite3) -> c_int {
     }
 }
 
-// #[no_mangle]
+// #[unsafe(no_mangle)]
 pub extern "C" fn crsql_init_db_versions_table(db: *mut sqlite3) -> c_int {
     match db.exec_safe("CREATE TABLE IF NOT EXISTS crsql_db_versions (\"site_id\" BLOB NOT NULL PRIMARY KEY, \"db_version\" INTEGER NOT NULL) STRICT;") {
       Ok(_) => ResultCode::OK as c_int,
@@ -112,7 +112,7 @@ fn crsql_create_schema_table_if_not_exists(db: *mut sqlite3) -> Result<ResultCod
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_maybe_update_db(db: *mut sqlite3, err_msg: *mut *mut c_char) -> c_int {
     // No schema table? First time this DB has been opened with this extension.
     if let Ok(has_schema_table) = has_table(db, consts::TBL_SCHEMA) {

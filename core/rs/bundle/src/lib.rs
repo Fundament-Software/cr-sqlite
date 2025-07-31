@@ -1,6 +1,6 @@
 #![no_std]
-#![feature(core_intrinsics)]
-#![feature(lang_items)]
+//#![feature(core_intrinsics)]
+//#![feature(lang_items)]
 
 extern crate alloc;
 
@@ -21,22 +21,23 @@ static ALLOCATOR: SQLite3Allocator = SQLite3Allocator {};
 
 // This must be our panic handler for WASM builds. For simplicity, we make it our panic handler for
 // all builds. Abort is also more portable than unwind, enabling us to go to more embedded use cases.
+#[cfg(target_family = "wasm")]
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     core::intrinsics::abort()
 }
 
-#[cfg(not(target_family = "wasm"))]
-#[lang = "eh_personality"]
-extern "C" fn eh_personality() {}
+//#[cfg(not(target_family = "wasm"))]
+//#[lang = "eh_personality"]
+//extern "C" fn eh_personality() {}
 
 #[cfg(target_family = "wasm")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub fn __rust_alloc_error_handler(_: Layout) -> ! {
     core::intrinsics::abort()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_crsqlrustbundle_init(
     db: *mut sqlite::sqlite3,
     err_msg: *mut *mut c_char,

@@ -9,7 +9,7 @@ use sqlite_nostd as sqlite;
 
 use crate::{c::crsql_ExtData, util::get_db_version_union_query};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn crsql_recreate_db_version_stmt(
     db: *mut sqlite3,
     ext_data: *mut crsql_ExtData,
