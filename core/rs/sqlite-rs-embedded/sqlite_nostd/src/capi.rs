@@ -44,6 +44,7 @@ pub use crate::bindings::{
 };
 
 mod aliased {
+    #[allow(unused_imports)]
     #[cfg(feature = "static")]
     pub use crate::bindings::{
         sqlite3_bind_blob as bind_blob, sqlite3_bind_double as bind_double,

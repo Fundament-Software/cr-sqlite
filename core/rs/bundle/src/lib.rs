@@ -5,6 +5,7 @@
 extern crate alloc;
 
 use core::ffi::c_char;
+#[cfg(target_family = "wasm")]
 use core::panic::PanicInfo;
 use crsql_core;
 use crsql_core::sqlite3_crsqlcore_init;

@@ -82,3 +82,7 @@ __declspec(dllexport)
 
   return rc;
 }
+
+int cr_sqlite_ext_autoinit() {
+  return sqlite3_auto_extension((void *)sqlite3_crsqlite_init);
+}
