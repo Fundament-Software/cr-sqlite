@@ -18,6 +18,7 @@ crsql_core = { path = "../core" }
 sqlite_nostd = { path = "../sqlite-rs-embedded/sqlite_nostd" }
 
 [features]
+default = ["static"]
 test = ["crsql_core/test"]
 libsql = ["crsql_core/libsql"]
 loadable_extension = [

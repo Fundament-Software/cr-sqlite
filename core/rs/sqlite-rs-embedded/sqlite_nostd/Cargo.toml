@@ -8,15 +8,12 @@ name = "sqlite_nostd"
 crate-type = ["rlib"]
 
 [dependencies]
-libsqlite3-sys = { version = "0.35", features = [
-  "bundled_bindings",
-  "loadable_extension",
-] }
+libsqlite3-sys = { version = "0.35", features = ["bundled_bindings"] }
 num-traits = { version = "0.2.17", default-features = false }
 num-derive = "0.4.1"
 
 [features]
-default = ["loadable_extension"]
+default = []
 loadable_extension = ["libsqlite3-sys/loadable_extension"]
 static = []
 omit_load_extension = []

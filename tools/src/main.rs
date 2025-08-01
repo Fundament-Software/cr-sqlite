@@ -23,12 +23,19 @@ fn main() {
     )
     .unwrap();
 
-    unsafe {
-        conn.load_extension_enable().unwrap();
-        conn.load_extension(&ext_file, None).unwrap();
-    }
+    //unsafe {
+    //    conn.load_extension_enable().unwrap();
+    //    conn.load_extension::<&String, &str>(&ext_file, None)
+    //        .unwrap();
+    //}
+    cr_sqlite_sys::init_cr_sqlite_ext();
 
-    let version = conn.query_row("SELECT value from crsql_master where key = 'crsqlite_version'", (), |row| row.get::<_, i32>(0))
+    let version = conn
+        .query_row(
+            "SELECT value from crsql_master where key = 'crsqlite_version'",
+            (),
+            |row| row.get::<_, i32>(0),
+        )
         .unwrap();
     let use_ts = version == 171000;
     create_crr(&conn);
@@ -46,10 +53,10 @@ fn main() {
     )
     .unwrap();
 
-    let mut trials = 100;
-    let mut batch_size = 1000;
+    let trials = 100;
+    let batch_size = 1000;
 
-    let mut count = 5;
+    let count = 5;
 
     // conn.trace(Some(|sql| println!("{sql}")));
 
@@ -59,7 +66,13 @@ fn main() {
         let start = Instant::now();
         for i in 0..trials {
             // let start = Instant::now();
-            insert(&mut conn, "v", batch_size, batch_size * ( i + (j * trials)), use_ts);
+            insert(
+                &mut conn,
+                "v",
+                batch_size,
+                batch_size * (i + (j * trials)),
+                use_ts,
+            );
             // let elapsed = start.elapsed();
             // println!("insert #{i} done in {elapsed:?}");
         }
@@ -68,23 +81,35 @@ fn main() {
     let avg_time = times.iter().sum::<Duration>() / times.len() as u32;
     let max_time = times.iter().max().unwrap();
     let min_time = times.iter().min().unwrap();
-    println!("insert (vanilla) avg time: {:?}, max: {:?}, min: {:?}", avg_time, max_time, min_time);
+    println!(
+        "insert (vanilla) avg time: {:?}, max: {:?}, min: {:?}",
+        avg_time, max_time, min_time
+    );
 
     let mut times = Vec::new();
     for j in 0..count {
         let start = Instant::now();
         for i in 0..trials {
             let start = Instant::now();
-            insert(&mut conn, "", batch_size, batch_size * ( i + (j * trials)), use_ts);
+            insert(
+                &mut conn,
+                "",
+                batch_size,
+                batch_size * (i + (j * trials)),
+                use_ts,
+            );
             let elapsed = start.elapsed();
-            // println!("insert #{i} done in {elapsed:?}");
+            println!("insert #{i} done in {elapsed:?}");
         }
         times.push(start.elapsed());
     }
     let avg_time = times.iter().sum::<Duration>() / times.len() as u32;
     let max_time = times.iter().max().unwrap();
     let min_time = times.iter().min().unwrap();
-    println!("insert avg time: {:?}, max: {:?}, min: {:?}", avg_time, max_time, min_time);
+    println!(
+        "insert avg time: {:?}, max: {:?}, min: {:?}",
+        avg_time, max_time, min_time
+    );
 
     // updates
     let mut times = Vec::new();
@@ -92,32 +117,50 @@ fn main() {
         let start = Instant::now();
         for i in 0..trials {
             let start = Instant::now();
-            update(&mut conn, "v", batch_size, batch_size * ( i + (j * trials)), use_ts);
+            update(
+                &mut conn,
+                "v",
+                batch_size,
+                batch_size * (i + (j * trials)),
+                use_ts,
+            );
             let elapsed = start.elapsed();
+            println!("update #{i} done in {elapsed:?}");
         }
         times.push(start.elapsed());
-        // println!("update #{i} done in {elapsed:?}");
     }
     let avg_time = times.iter().sum::<Duration>() / times.len() as u32;
     let max_time = times.iter().max().unwrap();
     let min_time = times.iter().min().unwrap();
-    println!("update (vanilla) avg time: {:?}, max: {:?}, min: {:?}", avg_time, max_time, min_time);
+    println!(
+        "update (vanilla) avg time: {:?}, max: {:?}, min: {:?}",
+        avg_time, max_time, min_time
+    );
 
     let mut times = Vec::new();
     for j in 0..count {
         let start = Instant::now();
         for i in 0..trials {
             let start = Instant::now();
-            update(&mut conn, "", batch_size, batch_size * ( i + (j * trials)), use_ts);
+            update(
+                &mut conn,
+                "",
+                batch_size,
+                batch_size * (i + (j * trials)),
+                use_ts,
+            );
             let elapsed = start.elapsed();
+            println!("update #{i} done in {elapsed:?}");
         }
         times.push(start.elapsed());
-        // println!("update #{i} done in {elapsed:?}");
     }
     let avg_time = times.iter().sum::<Duration>() / times.len() as u32;
     let max_time = times.iter().max().unwrap();
     let min_time = times.iter().min().unwrap();
-    println!("update avg time: {:?}, max: {:?}, min: {:?}", avg_time, max_time, min_time);
+    println!(
+        "update avg time: {:?}, max: {:?}, min: {:?}",
+        avg_time, max_time, min_time
+    );
 
     // // single insert
     // let start = Instant::now();
@@ -244,7 +287,7 @@ fn create_crr(conn: &Connection) {
         .unwrap();
 }
 
-fn create_merge_control(conn: &mut Connection) {
+pub fn create_merge_control(conn: &mut Connection) {
     conn.execute_batch(
         "
         CREATE TABLE merge_control (id PRIMARY KEY, tx INTEGER, content TEXT);
@@ -254,12 +297,14 @@ fn create_merge_control(conn: &mut Connection) {
     .unwrap();
 }
 
-fn setup_merge_test_db() -> Connection {
+pub fn setup_merge_test_db() -> Connection {
     let mut conn = Connection::open_in_memory().unwrap();
-    unsafe {
-        conn.load_extension_enable().unwrap();
-        conn.load_extension("../core/dist/crsqlite", None).unwrap();
-    }
+    //unsafe {
+    //    conn.load_extension_enable().unwrap();
+    //    conn.load_extension::<&str, &str>("../core/dist/crsqlite", None)
+    //        .unwrap();
+    //}
+    cr_sqlite_sys::init_cr_sqlite_ext();
     create_crr(&conn);
     create_merge_control(&mut conn);
 
@@ -311,7 +356,7 @@ fn setup_merge_test_db() -> Connection {
     conn
 }
 
-fn modify_rows(conn: &mut Connection) {
+pub fn modify_rows(conn: &mut Connection) {
     for t in 0..100 {
         let offset = t * 100;
         for i in 0..100 {
@@ -338,7 +383,7 @@ fn modify_rows(conn: &mut Connection) {
     }
 }
 
-fn merge(from: &Connection, to: &mut Connection, pfx: &str, count: usize, offset: usize) {
+pub fn merge(from: &Connection, to: &mut Connection, _pfx: &str, count: usize, offset: usize) {
     let mut prepped = from
         .prepare_cached("SELECT * FROM crsql_changes WHERE db_version = ?")
         .unwrap();
@@ -371,7 +416,13 @@ fn merge(from: &Connection, to: &mut Connection, pfx: &str, count: usize, offset
     tx.commit().unwrap();
 }
 
-fn normal_insert(from: &Connection, to: &mut Connection, pfx: &str, count: usize, offset: usize) {
+pub fn normal_insert(
+    from: &Connection,
+    to: &mut Connection,
+    _pfx: &str,
+    count: usize,
+    offset: usize,
+) {
     let mut prepped = from
         .prepare_cached("SELECT * FROM merge_control WHERE tx = ?")
         .unwrap();
@@ -407,7 +458,6 @@ fn random_str() -> String {
 }
 
 fn insert(conn: &mut Connection, pfx: &str, count: usize, offset: usize, use_ts: bool) {
-
     for i in 0..count {
         let tx = conn.transaction().unwrap();
         if use_ts && pfx == "" {
@@ -437,7 +487,6 @@ fn insert(conn: &mut Connection, pfx: &str, count: usize, offset: usize, use_ts:
         .unwrap();
         tx.commit().unwrap();
     }
-
 }
 
 // def update(pfx, count, offset):
@@ -481,7 +530,7 @@ fn update(conn: &mut Connection, pfx: &str, count: usize, offset: usize, use_ts:
     tx.commit().unwrap();
 }
 
-fn single_stmt_insert(conn: &mut Connection, pfx: &str, count: usize, offset: usize) {
+pub fn single_stmt_insert(conn: &mut Connection, pfx: &str, count: usize, offset: usize) {
     let offset = offset + 1000000;
     let values = (0..count)
         .map(|i| format!("({}, '{}', {}, '{}')", i + offset, "text", i, random_str()))
@@ -497,7 +546,7 @@ fn single_stmt_insert(conn: &mut Connection, pfx: &str, count: usize, offset: us
     tx.commit().unwrap();
 }
 
-fn read_changes(conn: &Connection, pfx: &str, count: usize, offset: usize) {
+pub fn read_changes(conn: &Connection, pfx: &str, count: usize, offset: usize) {
     for i in 0..count {
         if pfx == "v" {
             let mut prepped = conn

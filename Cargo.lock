@@ -48,6 +48,8 @@ dependencies = [
 name = "cr-sqlite-tools"
 version = "0.1.0"
 dependencies = [
+ "cr-sqlite-sys",
+ "crsql_bundle",
  "rand",
  "rusqlite",
  "tempfile",

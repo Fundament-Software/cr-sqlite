@@ -3,10 +3,11 @@ name = "cr-sqlite-sys"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-links = "sqlite"
+links = "crsqlite"
 
 [lib]
 path = "lib.rs"
+crate-type = ["rlib"]
 
 [features]
 default = []
