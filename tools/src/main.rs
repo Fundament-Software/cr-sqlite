@@ -4,14 +4,17 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use rusqlite::{types::Value, Connection};
 use tempfile::tempdir;
 
-// trials = 100
-// batch_size = 1000
+const TRIALS: usize = 10;
+const BATCH_SIZE: usize = 1000;
+
+const COUNT: usize = 5;
 
 fn main() {
     let tmp = tempdir().unwrap();
 
-    let mut args = std::env::args();
-    let ext_file = args.nth(1).unwrap_or("../core/dist/crsqlite".to_string());
+    // this MUST happen before the first connection!
+    let result = cr_sqlite_sys::init_cr_sqlite_ext();
+    assert_eq!(result, 0);
 
     let mut conn = rusqlite::Connection::open(tmp.path().join("perf.db")).unwrap();
 
@@ -23,13 +26,6 @@ fn main() {
     )
     .unwrap();
 
-    //unsafe {
-    //    conn.load_extension_enable().unwrap();
-    //    conn.load_extension::<&String, &str>(&ext_file, None)
-    //        .unwrap();
-    //}
-    cr_sqlite_sys::init_cr_sqlite_ext();
-
     let version = conn
         .query_row(
             "SELECT value from crsql_master where key = 'crsqlite_version'",
@@ -39,8 +35,6 @@ fn main() {
         .unwrap();
     let use_ts = version == 171000;
     create_crr(&conn);
-
-    println!("Using ext_file: {ext_file}, set_ts: {use_ts}");
 
     // create vanilla tables
     conn.execute_batch(
@@ -53,24 +47,19 @@ fn main() {
     )
     .unwrap();
 
-    let trials = 100;
-    let batch_size = 1000;
-
-    let count = 5;
-
     // conn.trace(Some(|sql| println!("{sql}")));
 
     // inserts
     let mut times = Vec::new();
-    for j in 0..count {
+    for j in 0..COUNT {
         let start = Instant::now();
-        for i in 0..trials {
+        for i in 0..TRIALS {
             // let start = Instant::now();
             insert(
                 &mut conn,
                 "v",
-                batch_size,
-                batch_size * (i + (j * trials)),
+                BATCH_SIZE,
+                BATCH_SIZE * (i + (j * TRIALS)),
                 use_ts,
             );
             // let elapsed = start.elapsed();
@@ -87,15 +76,15 @@ fn main() {
     );
 
     let mut times = Vec::new();
-    for j in 0..count {
+    for j in 0..COUNT {
         let start = Instant::now();
-        for i in 0..trials {
+        for i in 0..TRIALS {
             let start = Instant::now();
             insert(
                 &mut conn,
                 "",
-                batch_size,
-                batch_size * (i + (j * trials)),
+                BATCH_SIZE,
+                BATCH_SIZE * (i + (j * TRIALS)),
                 use_ts,
             );
             let elapsed = start.elapsed();
@@ -113,15 +102,15 @@ fn main() {
 
     // updates
     let mut times = Vec::new();
-    for j in 0..count {
+    for j in 0..COUNT {
         let start = Instant::now();
-        for i in 0..trials {
+        for i in 0..TRIALS {
             let start = Instant::now();
             update(
                 &mut conn,
                 "v",
-                batch_size,
-                batch_size * (i + (j * trials)),
+                BATCH_SIZE,
+                BATCH_SIZE * (i + (j * TRIALS)),
                 use_ts,
             );
             let elapsed = start.elapsed();
@@ -138,15 +127,15 @@ fn main() {
     );
 
     let mut times = Vec::new();
-    for j in 0..count {
+    for j in 0..COUNT {
         let start = Instant::now();
-        for i in 0..trials {
+        for i in 0..TRIALS {
             let start = Instant::now();
             update(
                 &mut conn,
                 "",
-                batch_size,
-                batch_size * (i + (j * trials)),
+                BATCH_SIZE,
+                BATCH_SIZE * (i + (j * TRIALS)),
                 use_ts,
             );
             let elapsed = start.elapsed();
