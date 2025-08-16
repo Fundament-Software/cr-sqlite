@@ -17,8 +17,8 @@ use sqlite_nostd::SQLite3Allocator;
 
 // This must be our allocator so we can transfer ownership of memory to SQLite and have SQLite free that memory for us.
 // This drastically reduces copies when passing strings and blobs back and forth between Rust and C.
-#[global_allocator]
-static ALLOCATOR: SQLite3Allocator = SQLite3Allocator {};
+//#[global_allocator]
+//static ALLOCATOR: SQLite3Allocator = SQLite3Allocator {};
 
 // This must be our panic handler for WASM builds. For simplicity, we make it our panic handler for
 // all builds. Abort is also more portable than unwind, enabling us to go to more embedded use cases.
