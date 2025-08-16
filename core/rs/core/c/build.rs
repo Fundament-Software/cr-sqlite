@@ -21,7 +21,7 @@ fn main() -> eyre::Result<()> {
     build.pic(true);
     build.std("c11"); // Note: original code wants C99
     build.opt_level(3);
-
+    //println!("cargo:rustc-link-lib=static:+whole-archive=crsqlite");
     // Note: Android/iOS support will need a sysroot option
 
     //let root = env!("CARGO_MANIFEST_DIR");
