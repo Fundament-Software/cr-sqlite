@@ -12,7 +12,7 @@ jobs:
           # - os: windows-2022 # Windows is complete nonsense. If someone wants to figure out how to make tests run there go ahead.
           - os: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
