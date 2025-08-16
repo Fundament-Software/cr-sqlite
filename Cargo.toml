@@ -8,6 +8,7 @@ members = [
   "core/rs/fractindex-core",
   "core/rs/sqlite-rs-embedded/sqlite_nostd",
 ]
+default-members = ["core/src", "tools"]
 
 [workspace.package]
 version = "0.16.4"

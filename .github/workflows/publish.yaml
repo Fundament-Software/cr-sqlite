@@ -27,7 +27,7 @@ jobs:
             asset_name: crsqlite-darwin-x86_64.zip
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
@@ -63,7 +63,7 @@ jobs:
             asset_name: crsqlite-darwin-aarch64.zip
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
@@ -115,7 +115,7 @@ jobs:
         run: |
           sudo apt update && sudo apt install -y gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
@@ -151,7 +151,7 @@ jobs:
             asset_name: crsqlite-win-x86_64.zip
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
@@ -191,7 +191,7 @@ jobs:
             asset_name: crsqlite-win-i686.zip
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
@@ -231,7 +231,7 @@ jobs:
             asset_name: crsqlite-aarch64-linux-android.zip
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
