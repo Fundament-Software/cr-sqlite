@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Matt Wonlaw"]
 keywords = ["sqlite", "cr-sqlite", "crdt"]
-license = "Apache 2"
+license = "Apache-2.0"
 
 [lib]
 name = "crsql_core"
