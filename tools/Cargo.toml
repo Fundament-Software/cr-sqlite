@@ -6,6 +6,5 @@ edition = "2021"
 [dependencies]
 rand = "0.8.5"
 rusqlite = { version = "0.37", features = ["bundled", "trace"] }
-cr-sqlite-sys = { path = "../core/src" }
 crsql_bundle = { path = "../core/rs/bundle" }
 tempfile = "3.14.0"

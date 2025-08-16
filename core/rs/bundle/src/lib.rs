@@ -8,12 +8,13 @@ use core::ffi::c_char;
 #[cfg(target_family = "wasm")]
 use core::panic::PanicInfo;
 use crsql_core;
+pub use crsql_core::init_cr_sqlite_ext;
 use crsql_core::sqlite3_crsqlcore_init;
 #[cfg(feature = "test")]
 pub use crsql_core::test_exports;
 use crsql_fractindex_core::sqlite3_crsqlfractionalindex_init;
 pub use sqlite_nostd as sqlite;
-use sqlite_nostd::SQLite3Allocator;
+//use sqlite_nostd::SQLite3Allocator;
 
 // This must be our allocator so we can transfer ownership of memory to SQLite and have SQLite free that memory for us.
 // This drastically reduces copies when passing strings and blobs back and forth between Rust and C.

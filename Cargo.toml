@@ -1,14 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-  "core/src",
   "tools",
   "core/rs/core",
   "core/rs/bundle",
   "core/rs/fractindex-core",
   "core/rs/sqlite-rs-embedded/sqlite_nostd",
 ]
-default-members = ["core/src", "tools"]
+default-members = ["core/rs/bundle", "tools"]
 
 [workspace.package]
 version = "0.16.4"
