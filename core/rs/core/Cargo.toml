@@ -5,6 +5,7 @@ edition = "2024"
 authors = ["Matt Wonlaw"]
 keywords = ["sqlite", "cr-sqlite", "crdt"]
 license = "Apache-2.0"
+links = "crsqlite"
 
 [lib]
 name = "crsql_core"
@@ -18,6 +19,9 @@ num-derive = "0.4.1"
 libc-print = "*"
 
 [dev-dependencies]
+
+[build-dependencies]
+cc.workspace = true
 
 [features]
 test = []

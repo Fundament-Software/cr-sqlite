@@ -1095,3 +1095,19 @@ pub extern "C" fn crsql_create_crr(
         _ => ResultCode::NOMEM as c_int,
     }
 }
+
+unsafe extern "C" {
+    pub unsafe fn sqlite3_crsqlite_init(
+        db: *mut sqlite::bindings::sqlite3,
+        pz_err_msg: *mut *mut u8,
+        p_api: *mut sqlite::bindings::sqlite3_api_routines,
+    ) -> core::ffi::c_int;
+}
+
+pub fn init_cr_sqlite_ext() -> i32 {
+    unsafe {
+        sqlite::bindings::sqlite3_auto_extension(Some(core::mem::transmute(
+            sqlite3_crsqlite_init as *const (),
+        )))
+    }
+}

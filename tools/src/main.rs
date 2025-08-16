@@ -13,7 +13,7 @@ fn main() {
     let tmp = tempdir().unwrap();
 
     // this MUST happen before the first connection!
-    let result = cr_sqlite_sys::init_cr_sqlite_ext();
+    let result = crsql_bundle::init_cr_sqlite_ext();
     assert_eq!(result, 0);
 
     let mut conn = rusqlite::Connection::open(tmp.path().join("perf.db")).unwrap();
@@ -293,7 +293,7 @@ pub fn setup_merge_test_db() -> Connection {
     //    conn.load_extension::<&str, &str>("../core/dist/crsqlite", None)
     //        .unwrap();
     //}
-    cr_sqlite_sys::init_cr_sqlite_ext();
+    crsql_bundle::init_cr_sqlite_ext();
     create_crr(&conn);
     create_merge_control(&mut conn);
 
@@ -557,4 +557,33 @@ pub fn read_changes(conn: &Connection, pfx: &str, count: usize, offset: usize) {
             }
         }
     }
+}
+
+#[test]
+fn blah() -> () {
+    let tmp = tempdir().unwrap();
+
+    // this MUST happen before the first connection!
+    let result = crsql_bundle::init_cr_sqlite_ext();
+    assert_eq!(result, 0);
+
+    let mut conn = rusqlite::Connection::open(tmp.path().join("perf.db")).unwrap();
+
+    conn.execute_batch(
+        "
+        PRAGMA journal_mode = WAL;
+        PRAGMA synchronous = NORMAL;
+    ",
+    )
+    .unwrap();
+
+    let version = conn
+        .query_row(
+            "SELECT value from crsql_master where key = 'crsqlite_version'",
+            (),
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap();
+    let use_ts = version == 171000;
+    create_crr(&conn);
 }
