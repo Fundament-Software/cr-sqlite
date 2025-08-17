@@ -13,7 +13,7 @@ use sqlite::{Context, ManagedStmt, Value};
 use sqlite_nostd::ResultCode;
 use sqlite_nostd::{self as sqlite, changes64};
 
-use crate::tableinfo::{crsql_ensure_table_infos_are_up_to_date, ColumnInfo, TableInfo};
+use crate::tableinfo::{ColumnInfo, TableInfo, crsql_ensure_table_infos_are_up_to_date};
 
 pub mod after_delete;
 pub mod after_insert;

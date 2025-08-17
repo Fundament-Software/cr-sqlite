@@ -12,9 +12,9 @@ use core::ffi::{c_char, c_int};
 use sqlite::ColumnType;
 use sqlite_nostd as sqlite;
 
-use sqlite::{args, sqlite3, ManagedConnection, Value};
-use sqlite::{strlit, Context};
 use sqlite::{Connection, ResultCode};
+use sqlite::{Context, strlit};
+use sqlite::{ManagedConnection, Value, args, sqlite3};
 
 static IS_UNIQUE_IDX_SQL: &str = "SELECT \"unique\" FROM pragma_index_list(?) WHERE name = ?";
 static IDX_COLS_SQL: &str = "SELECT name FROM pragma_index_info(?) ORDER BY seqno ASC";

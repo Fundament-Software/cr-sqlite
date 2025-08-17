@@ -3,7 +3,7 @@ use core::ffi::c_int;
 use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
-use sqlite::{sqlite3, value, Context, ResultCode};
+use sqlite::{Context, ResultCode, sqlite3, value};
 use sqlite_nostd as sqlite;
 
 use crate::compare_values::crsql_compare_sqlite_values;
