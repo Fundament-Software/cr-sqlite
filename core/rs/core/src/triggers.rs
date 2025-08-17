@@ -4,7 +4,7 @@ use sqlite::Connection;
 
 use core::ffi::c_char;
 
-use sqlite::{sqlite3, ResultCode};
+use sqlite::{ResultCode, sqlite3};
 use sqlite_nostd as sqlite;
 
 use crate::tableinfo::TableInfo;
@@ -57,13 +57,13 @@ fn create_update_trigger(
         )
     } else {
         format!(
-        "VALUES (crsql_after_update('{table_name}', {pk_new_list}, {pk_old_list}, {non_pk_new_list}, {non_pk_old_list}))",
-        table_name = crate::util::escape_ident_as_value(table_name),
-        pk_new_list = pk_new_list,
-        pk_old_list = pk_old_list,
-        non_pk_new_list = crate::util::as_identifier_list(non_pk_columns, Some("NEW."))?,
-        non_pk_old_list = crate::util::as_identifier_list(non_pk_columns, Some("OLD."))?
-      )
+            "VALUES (crsql_after_update('{table_name}', {pk_new_list}, {pk_old_list}, {non_pk_new_list}, {non_pk_old_list}))",
+            table_name = crate::util::escape_ident_as_value(table_name),
+            pk_new_list = pk_new_list,
+            pk_old_list = pk_old_list,
+            non_pk_new_list = crate::util::as_identifier_list(non_pk_columns, Some("NEW."))?,
+            non_pk_old_list = crate::util::as_identifier_list(non_pk_columns, Some("OLD."))?
+        )
     };
     db.exec_safe(&format!(
         "CREATE TRIGGER IF NOT EXISTS \"{table_name}__crsql_utrig\"

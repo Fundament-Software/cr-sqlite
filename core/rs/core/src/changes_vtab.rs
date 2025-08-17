@@ -10,6 +10,7 @@ use alloc::vec::Vec;
 use core::ffi::{CStr, c_char, c_int};
 use core::mem::{self, forget};
 use core::ptr::null_mut;
+use core::slice::from_raw_parts_mut;
 
 use alloc::ffi::CString;
 #[cfg(not(feature = "std"))]
@@ -62,6 +63,7 @@ fn changes_best_index(
     _vtab: *mut sqlite::vtab,
     index_info: *mut sqlite::index_info,
 ) -> Result<ResultCode, ResultCode> {
+    use core::fmt::Write;
     let mut idx_num: i32 = 0;
 
     let mut first_constraint = true;
@@ -87,11 +89,11 @@ fn changes_best_index(
                 if constraint.op == sqlite::INDEX_CONSTRAINT_ISNOTNULL as u8
                     || constraint.op == sqlite::INDEX_CONSTRAINT_ISNULL as u8
                 {
-                    str.push_str(&format!("{} {}", col_name, op_string));
+                    write!(str, "{} {}", col_name, op_string).unwrap();
                     constraint_usage[i].argvIndex = 0;
                     constraint_usage[i].omit = 1;
                 } else {
-                    str.push_str(&format!("{} {} ?", col_name, op_string));
+                    write!(str, "{} {} ?", col_name, op_string).unwrap();
                     constraint_usage[i].argvIndex = arg_v_index;
                     constraint_usage[i].omit = 1;
                     arg_v_index += 1;
@@ -142,9 +144,6 @@ fn changes_best_index(
         }
     }
 
-    // manual null-term since we'll pass to C
-    str.push('\0');
-
     // TODO: update your order by py test to explain query plans to ensure correct indices are selected
     // both constraints are present. Also to check that order by is consumed.
     if idx_num & 6 == 6 {
@@ -168,15 +167,24 @@ fn changes_best_index(
         }
     }
 
+    // manual null-term since we'll pass to C
+    // str.push('\0');
+
     unsafe {
+        // Copy the string for now until we can use a custom allocator or custom string object.
+        let str_ptr = sqlite_nostd::malloc(str.len() + 1);
+        let c_str = from_raw_parts_mut(str_ptr, str.len() + 1);
+        c_str[..str.len()].copy_from_slice(str.as_bytes());
+        c_str[str.len()] = 0;
+
         (*index_info).idxNum = idx_num;
         (*index_info).orderByConsumed = if order_by_consumed { 1 } else { 0 };
         // forget str
-        let ptr = str.as_ptr();
-        core::mem::forget(str);
+        //let ptr = str.as_ptr();
+        //core::mem::forget(str);
         // pass to c. We've manually null terminated the string.
         // sqlite will free it for us.
-        (*index_info).idxStr = ptr as *mut c_char;
+        (*index_info).idxStr = str_ptr as *mut c_char;
         (*index_info).needToFreeIdxStr = 1;
     }
 
