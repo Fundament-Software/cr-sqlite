@@ -3,7 +3,7 @@ use core::ffi::{c_char, c_int};
 use crate::{consts, tableinfo::TableInfo};
 use alloc::{ffi::CString, format};
 use core::slice;
-use sqlite::{sqlite3, Connection, Destructor, ResultCode};
+use sqlite::{Connection, Destructor, ResultCode, sqlite3};
 use sqlite_nostd as sqlite;
 
 fn uuid() -> [u8; 16] {
@@ -157,7 +157,10 @@ fn maybe_update_db_inner(
     // libc_print::libc_println!("recorded_version: {}", recorded_version);
 
     if recorded_version < consts::CRSQLITE_VERSION_0_17_0 && !is_blank_slate {
-        let cstring = CString::new(format!("Opening a db created with cr-sqlite version {} is not supported. Upcoming release 0.17.0 is a breaking change.", recorded_version))?;
+        let cstring = CString::new(format!(
+            "Opening a db created with cr-sqlite version {} is not supported. Upcoming release 0.17.0 is a breaking change.",
+            recorded_version
+        ))?;
         unsafe {
             (*err_msg) = cstring.into_raw();
             return Err(ResultCode::ERROR);

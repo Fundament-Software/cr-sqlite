@@ -61,8 +61,8 @@ pub fn changes_union_query(
     // Manually null-terminate the string so we don't have to copy it to create a CString.
     // We can just extract the raw bytes of the Rust string.
     Ok(format!(
-      "SELECT tbl, pks, cid, col_vrsn, db_vrsn, site_id, key, seq, cl, ts FROM ({unions}) {idx_str}\0",
-      unions = sub_queries.join(" UNION ALL "),
-      idx_str = idx_str,
+        "SELECT tbl, pks, cid, col_vrsn, db_vrsn, site_id, key, seq, cl, ts FROM ({unions}) {idx_str}\0",
+        unions = sub_queries.join(" UNION ALL "),
+        idx_str = idx_str,
     ))
 }

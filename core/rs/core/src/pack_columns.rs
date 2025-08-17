@@ -23,7 +23,8 @@ pub extern "C" fn crsql_pack_columns(
         }
         Ok(blob) => {
             // TODO: pass a destructor so we don't have to copy the blob
-            ctx.result_blob_owned(blob);
+            // ctx.result_blob_owned(blob);
+            ctx.result_blob_transient(&blob);
         }
     }
 }

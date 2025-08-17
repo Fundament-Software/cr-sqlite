@@ -6,7 +6,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::str::Utf8Error;
-use sqlite::{sqlite3, ColumnType, Connection, ResultCode};
+use sqlite::{ColumnType, Connection, ResultCode, sqlite3};
 use sqlite_nostd as sqlite;
 
 pub fn get_dflt_value(
