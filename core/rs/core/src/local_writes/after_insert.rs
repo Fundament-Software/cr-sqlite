@@ -1,10 +1,10 @@
 use alloc::string::String;
 use alloc::string::ToString;
 use core::ffi::c_int;
-use sqlite::sqlite3;
-use sqlite::value;
 use sqlite::Context;
 use sqlite::ResultCode;
+use sqlite::sqlite3;
+use sqlite::value;
 use sqlite_nostd as sqlite;
 
 use crate::{c::crsql_ExtData, tableinfo::TableInfo};

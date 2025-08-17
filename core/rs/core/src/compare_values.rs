@@ -1,8 +1,8 @@
 use alloc::format;
 use alloc::string::String;
 use core::ffi::c_int;
-use sqlite::value;
 use sqlite::Value;
+use sqlite::value;
 use sqlite_nostd as sqlite;
 
 // TODO: add an integration test that ensures NULL == NULL!

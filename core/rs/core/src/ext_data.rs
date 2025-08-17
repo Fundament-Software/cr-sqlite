@@ -4,7 +4,7 @@ use alloc::vec;
 use core::ffi::c_int;
 use core::ptr::null_mut;
 
-use sqlite::{sqlite3, Connection, ResultCode, Stmt};
+use sqlite::{Connection, ResultCode, Stmt, sqlite3};
 use sqlite_nostd as sqlite;
 
 use crate::{c::crsql_ExtData, util::get_db_version_union_query};

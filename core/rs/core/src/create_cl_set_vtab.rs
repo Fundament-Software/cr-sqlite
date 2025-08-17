@@ -7,7 +7,7 @@ use crate::create_crr::create_crr;
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
-use sqlite::{sqlite3, Connection, CursorRef, StrRef, VTabArgs, VTabRef};
+use sqlite::{Connection, CursorRef, StrRef, VTabArgs, VTabRef, sqlite3};
 use sqlite_nostd as sqlite;
 use sqlite_nostd::ResultCode;
 
