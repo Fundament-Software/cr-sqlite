@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use rand::{distr::Alphanumeric, RngExt};
 use rusqlite::{types::Value, Connection};
 use tempfile::tempdir;
 
@@ -398,7 +398,7 @@ pub fn merge(from: &Connection, to: &mut Connection, _pfx: &str, count: usize, o
         let mut prepped = tx.prepare_cached(&insert).unwrap();
         prepped
             .execute(rusqlite::params_from_iter(
-                (0..col_count).map(|i| Value::from(row.get_ref_unwrap(i))),
+                (0..col_count).map(|i| Value::try_from(row.get_ref_unwrap(i)).unwrap()),
             ))
             .unwrap();
     }
@@ -431,7 +431,7 @@ pub fn normal_insert(
             .unwrap();
         prepped
             .execute(rusqlite::params_from_iter(
-                (0..col_count).map(|i| Value::from(row.get_ref_unwrap(i))),
+                (0..col_count).map(|i| Value::try_from(row.get_ref_unwrap(i)).unwrap()),
             ))
             .unwrap();
     }
@@ -439,7 +439,7 @@ pub fn normal_insert(
 }
 
 fn random_str() -> String {
-    thread_rng()
+    rand::rng()
         .sample_iter(&Alphanumeric)
         .take(5)
         .map(char::from) // From link above, this is needed in later versions

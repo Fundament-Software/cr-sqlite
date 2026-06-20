@@ -30,5 +30,5 @@ panic = "abort"
 [workspace.dependencies]
 cxx = "1.0"
 eyre = "0.6"
-cc = "1.0"
+cc = "1.2"
 cxx-build = "1.0"
