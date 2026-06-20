@@ -307,7 +307,7 @@ mod tests {
     use crate::fractindex;
     use alloc::vec;
     use alloc::{string::String, vec::Vec};
-    use rand::distributions::{Distribution, Uniform};
+    use rand::distr::{Distribution, Uniform};
 
     use super::SMALLEST_INTEGER;
     #[test]
@@ -392,8 +392,8 @@ mod tests {
 
     #[test]
     fn generate_insert_order() {
-        let mut rng = rand::thread_rng();
-        let die = Uniform::from(0..5);
+        let mut rng = rand::rng();
+        let die = Uniform::new(0, 5).unwrap();
         // 1. generate a list of indices
         // 2. Permute the copy by moving items around
         // 3. Get new indice of the item moved for each move

@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rand = "0.8.5"
-rusqlite = { version = "0.37", features = ["bundled", "trace"] }
+rand = { version = "0.10.1", features = ["thread_rng"] }
+rusqlite = { version = "0.40", features = [
+  "bundled",
+  "trace",
+  "fallible_uint",
+] }
 crsql_bundle = { path = "../core/rs/bundle" }
-tempfile = "3.14.0"
+tempfile = "3.27.0"
